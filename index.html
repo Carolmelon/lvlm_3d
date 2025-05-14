@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>开放世界游戏原型</title>
+    <title>3D环境LVLM验证系统</title>
     <style>
         body { 
             margin: 0; 
@@ -60,15 +60,113 @@
             font-family: monospace;
             display: none;
         }
+        #lvlm-panel {
+            position: absolute;
+            top: 50%;
+            right: 0;
+            transform: translateY(-50%);
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px 0 0 5px;
+            font-size: 14px;
+            width: 50px;
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 90;
+        }
+        #lvlm-panel button {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #lvlm-panel button:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        #lvlm-control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 100;
+            display: none;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        #lvlm-control-panel input, 
+        #lvlm-control-panel select,
+        #lvlm-control-panel button {
+            margin: 5px 0;
+            width: 100%;
+            padding: 5px;
+        }
+        #lvlm-result {
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 10px;
+            margin-top: 10px;
+            word-break: break-all;
+            white-space: pre-wrap;
+        }
+        #lvlm-camera-view {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 200px;
+            height: 150px;
+            border: 2px solid white;
+            border-radius: 5px;
+            overflow: hidden;
+            display: none;
+        }
+        .lvlm-button {
+            background-color: #444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-right: 5px;
+            font-size: 12px;
+        }
+        .lvlm-button:hover {
+            background-color: #666;
+        }
     </style>
 </head>
 <body>
-    <div id="loading">正在加载世界...</div>
-    <div id="start-prompt">点击此处开始游戏<br>（锁定鼠标指针）</div>
+    <div id="loading">正在加载LVLM验证环境...</div>
+    <div id="start-prompt">点击此处开始<br>（锁定鼠标指针）</div>
     <div id="info">
-        WASD或方向键移动 | 鼠标控制视角 | 空格跳跃 | H键显示/隐藏此提示
+        WASD或方向键移动 | 鼠标控制视角 | 空格跳跃 | H键显示/隐藏此提示 | Ctrl+L打开LVLM控制面板
     </div>
     <div id="debug"></div>
+    
+    <!-- LVLM面板 -->
+    <div id="lvlm-panel">
+        <button id="lvlm-up" title="向上看">⬆️</button>
+        <button id="lvlm-forward" title="向前移动">⬆️</button>
+        <button id="lvlm-settings" title="设置">⚙️</button>
+    </div>
+    
+    <!-- LVLM相机视图 -->
+    <div id="lvlm-camera-view"></div>
+    
     <script type="module" src="/src/main.js"></script>
     <script>
         document.getElementById('start-prompt').addEventListener('click', function() {
@@ -79,6 +177,27 @@
         document.addEventListener('pointerlockchange', function() {
             if (document.pointerLockElement !== document.body) {
                 document.getElementById('start-prompt').style.display = 'block';
+            }
+        });
+        
+        // LVLM控制按钮
+        document.getElementById('lvlm-up').addEventListener('click', function() {
+            if (window.lvlmAPI) {
+                window.lvlmAPI.executeCommand({ type: 'look', direction: 'up' });
+            }
+        });
+        
+        document.getElementById('lvlm-forward').addEventListener('click', function() {
+            if (window.lvlmAPI) {
+                window.lvlmAPI.executeCommand({ type: 'move', direction: 'forward', distance: 1 });
+            }
+        });
+        
+        document.getElementById('lvlm-settings').addEventListener('click', function() {
+            // 打开LVLM控制面板
+            const panel = document.getElementById('lvlm-control-panel');
+            if (panel) {
+                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
             }
         });
     </script>

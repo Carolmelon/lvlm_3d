@@ -4,6 +4,7 @@ import { Player } from './Player.js';
 import { World } from './World.js';
 import { loadingManager } from './utils/loadingManager.js';
 import { Debug } from './utils/debug.js';
+import { setupAPI } from './lvlm/API.js';
 
 // 创建调试工具
 const debug = new Debug();
@@ -131,9 +132,18 @@ function animate() {
     renderer.render(scene, camera);
 }
 
-// 加载完成后开始游戏
+// 修改加载完成事件
 loadingManager.onLoad = () => {
     document.getElementById('loading').style.display = 'none';
     console.log('游戏已加载，点击屏幕开始玩！');
+    
+    // 初始化LVLM API接口
+    setupAPI(world, player, renderer, scene, camera);
+    
+    // 更新起始提示
+    const startPrompt = document.getElementById('start-prompt');
+    startPrompt.innerHTML = '点击此处开始游戏<br>（锁定鼠标指针）<br><span style="font-size:12px;">提示: 按Ctrl+L打开LVLM控制面板</span>';
+    
+    // 开始动画循环
     animate();
 }; 

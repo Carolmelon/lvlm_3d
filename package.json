@@ -1,18 +1,19 @@
 {
-  "name": "threejs-open-world",
+  "name": "threejs-lvlm-environment",
   "version": "1.0.0",
-  "description": "Three.js开放世界游戏原型",
+  "description": "Three.js LVLM验证环境",
   "main": "index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "prepare": "mkdir -p src/lvlm/utils",
+    "dev": "npm run prepare && vite",
+    "build": "npm run prepare && vite build",
     "preview": "vite preview"
   },
   "keywords": [
     "three.js",
     "webgl",
-    "game",
-    "open-world"
+    "lvlm",
+    "visual-language-model"
   ],
   "author": "",
   "license": "ISC",

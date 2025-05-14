@@ -200,4 +200,177 @@ export class World {
     getGround() {
         return this.ground;
     }
+
+    // 新增: 获取环境状态信息
+    getEnvironmentState() {
+        return {
+            terrain: {
+                size: this.terrainSize,
+                heightMap: this.serializeHeightMap()
+            },
+            objects: {
+                trees: this.trees.map(tree => ({
+                    position: {
+                        x: tree.position.x,
+                        y: tree.position.y,
+                        z: tree.position.z
+                    },
+                    type: 'tree'
+                })),
+                rocks: this.rocks.map(rock => ({
+                    position: {
+                        x: rock.position.x,
+                        y: rock.position.y,
+                        z: rock.position.z
+                    },
+                    scale: rock.mesh.scale.x,
+                    type: 'rock'
+                }))
+            },
+            time: Date.now()
+        };
+    }
+    
+    // 新增: 序列化高度图数据（简化版）
+    serializeHeightMap() {
+        if (!this.ground || !this.ground.geometry) {
+            return { error: '地形未初始化' };
+        }
+        
+        // 简化高度图数据，只返回采样点
+        const sampleSize = 16; // 采样间隔，减少数据量
+        const positions = this.ground.geometry.attributes.position;
+        const widthSegments = Math.sqrt(positions.count) - 1;
+        const heightSegments = widthSegments;
+        
+        const samples = [];
+        
+        for (let z = 0; z <= heightSegments; z += sampleSize) {
+            for (let x = 0; x <= widthSegments; x += sampleSize) {
+                const index = z * (widthSegments + 1) + x;
+                if (index < positions.count) {
+                    samples.push({
+                        x: positions.getX(index),
+                        y: positions.getY(index),
+                        z: positions.getZ(index)
+                    });
+                }
+            }
+        }
+        
+        return {
+            samples: samples,
+            width: this.terrainSize,
+            height: this.terrainSize,
+            widthSegments: widthSegments,
+            heightSegments: heightSegments,
+            sampleSize: sampleSize
+        };
+    }
+    
+    // 新增: 获取两点之间的路径
+    getPathBetween(startX, startZ, endX, endZ, maxSteps = 10) {
+        const path = [];
+        
+        // 起点和终点高度
+        const startY = this.getHeightAt(startX, startZ);
+        const endY = this.getHeightAt(endX, endZ);
+        
+        path.push({x: startX, y: startY, z: startZ});
+        
+        // 计算直线距离
+        const distance = Math.sqrt(
+            Math.pow(endX - startX, 2) + 
+            Math.pow(endZ - startZ, 2)
+        );
+        
+        // 根据距离确定步数，但不超过maxSteps
+        const steps = Math.min(Math.max(2, Math.ceil(distance / 10)), maxSteps);
+        
+        // 生成中间点
+        for (let i = 1; i < steps; i++) {
+            const t = i / steps;
+            const x = startX + (endX - startX) * t;
+            const z = startZ + (endZ - startZ) * t;
+            const y = this.getHeightAt(x, z);
+            
+            path.push({x, y, z});
+        }
+        
+        path.push({x: endX, y: endY, z: endZ});
+        
+        return path;
+    }
+    
+    // 新增: 查找最近的特定类型对象
+    findNearestObject(x, z, type = 'tree', maxDistance = 100) {
+        let nearest = null;
+        let minDistance = maxDistance;
+        
+        const objectsToSearch = type === 'tree' ? this.trees : 
+                               type === 'rock' ? this.rocks : 
+                               [...this.trees, ...this.rocks];
+        
+        for (const obj of objectsToSearch) {
+            const position = obj.position;
+            const distance = Math.sqrt(
+                Math.pow(position.x - x, 2) + 
+                Math.pow(position.z - z, 2)
+            );
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearest = {
+                    type: type === 'tree' || obj.trunk ? 'tree' : 'rock',
+                    position: position.clone(),
+                    distance: distance
+                };
+            }
+        }
+        
+        return nearest;
+    }
+    
+    // 新增: 检查位置是否可访问(没有障碍物)
+    isPositionAccessible(x, y, z) {
+        // 简化检查，只确保位置在地形范围内
+        const halfSize = this.terrainSize / 2;
+        if (x < -halfSize || x > halfSize || z < -halfSize || z > halfSize) {
+            return false;
+        }
+        
+        // 检查位置是否有足够高度（防止陷入地下）
+        const groundHeight = this.getHeightAt(x, z);
+        if (y < groundHeight) {
+            return false;
+        }
+        
+        // 检查是否与树木碰撞
+        for (const tree of this.trees) {
+            const distance = Math.sqrt(
+                Math.pow(tree.position.x - x, 2) + 
+                Math.pow(tree.position.z - z, 2)
+            );
+            
+            // 树木碰撞半径设为2
+            if (distance < 2) {
+                return false;
+            }
+        }
+        
+        // 检查是否与岩石碰撞
+        for (const rock of this.rocks) {
+            const distance = Math.sqrt(
+                Math.pow(rock.position.x - x, 2) + 
+                Math.pow(rock.position.z - z, 2)
+            );
+            
+            // 岩石碰撞半径设为岩石大小的1.5倍
+            if (distance < rock.mesh.scale.x * 1.5) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
 } 
