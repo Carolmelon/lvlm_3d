@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>开放世界游戏原型</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        canvas { 
+            display: block; 
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 5px;
+            font-size: 16px;
+            z-index: 100;
+        }
+        #start-prompt {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 5px;
+            font-size: 18px;
+            text-align: center;
+            cursor: pointer;
+        }
+        #debug {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.5);
+            padding: 5px;
+            font-size: 10px;
+            font-family: monospace;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">正在加载世界...</div>
+    <div id="start-prompt">点击此处开始游戏<br>（锁定鼠标指针）</div>
+    <div id="info">
+        WASD或方向键移动 | 鼠标控制视角 | 空格跳跃 | H键显示/隐藏此提示
+    </div>
+    <div id="debug"></div>
+    <script type="module" src="/src/main.js"></script>
+    <script>
+        document.getElementById('start-prompt').addEventListener('click', function() {
+            document.body.requestPointerLock();
+            this.style.display = 'none';
+        });
+        
+        document.addEventListener('pointerlockchange', function() {
+            if (document.pointerLockElement !== document.body) {
+                document.getElementById('start-prompt').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 
