@@ -142,7 +142,9 @@ function animate() {
             forward: player.keys.forward,
             backward: player.keys.backward,
             left: player.keys.left,
-            right: player.keys.right
+            right: player.keys.right,
+            jump: player.keys.jump,
+            crouch: player.keys.crouch
         },
         collisions: player.collidableObjects.length, // 显示碰撞对象数量
         standing: player.isJumping ? "空中" : (player.isCrouching ? "下蹲" : "站立"), // 显示玩家状态

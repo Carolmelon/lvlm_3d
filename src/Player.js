@@ -20,6 +20,12 @@ export class Player {
         this.isCrouching = false; // 是否下蹲
         this.standingSpeed = 10; // 站立时的速度
         this.crouchSpeed = 5; // 下蹲时的速度
+        this.crouchJumpForce = 7; // 下蹲时的跳跃力
+        
+        // 相机视角位置参数
+        this.eyeOffset = 1.7; // 相机在玩家头部的位置偏移（眼睛高度）
+        this.crouchEyeOffset = 0.8; // 下蹲时的眼睛高度
+        this.crouchAnimationSpeed = 8; // 下蹲/站立动画速度
         
         // 碰撞参数
         this.radius = 0.5; // 玩家碰撞半径
@@ -40,6 +46,7 @@ export class Player {
         this.pitchObject = new THREE.Object3D(); // 俯仰（上下看）
         this.yawObject = new THREE.Object3D(); // 偏航（左右看）
         
+        this.pitchObject.position.y = this.eyeOffset; // 初始化相机高度为眼睛高度
         this.pitchObject.add(camera);
         this.yawObject.add(this.pitchObject);
         
@@ -251,7 +258,7 @@ export class Player {
         }
         
         // 处理下蹲状态
-        this.handleCrouching();
+        this.handleCrouching(delta);
         
         // 计算移动方向
         this.direction.set(0, 0, 0);
@@ -282,9 +289,10 @@ export class Player {
         // 应用重力和跳跃
         this.velocity.y -= this.gravity * delta;
         
-        // 下蹲状态下不能跳跃
-        if (this.keys.jump && !this.isJumping && !this.isCrouching) {
-            this.velocity.y = this.jumpForce;
+        // 支持蹲着跳跃，但跳跃力度较小
+        if (this.keys.jump && !this.isJumping) {
+            const jumpForce = this.isCrouching ? this.crouchJumpForce : this.jumpForce;
+            this.velocity.y = jumpForce;
             this.isJumping = true;
         }
         
@@ -326,48 +334,49 @@ export class Player {
             }
         }
         
-        // 更新相机位置
+        // 更新yaw对象位置
         this.yawObject.position.copy(this.position);
+        
+        // 更新相机高度，实现平滑过渡效果
+        this.updateCameraHeight(delta);
     }
     
     // 处理下蹲状态
-    handleCrouching() {
-        // 如果在空中，不能下蹲
-        if (this.isJumping) {
-            this.keys.crouch = false;
-            if (this.isCrouching) {
-                this.isCrouching = false;
-                this.height = this.standingHeight;
-                this.moveSpeed = this.standingSpeed;
-                // 调整相机高度
-                this.position.y += (this.standingHeight - this.crouchHeight);
-            }
-            return;
-        }
-        
+    handleCrouching(delta) {
         // 处理下蹲状态变化
         if (this.keys.crouch && !this.isCrouching) {
             // 从站立到下蹲
             this.isCrouching = true;
             this.height = this.crouchHeight;
-            this.moveSpeed = this.crouchSpeed;
-            // 调整相机高度，保持双脚位置不变
-            this.position.y -= (this.standingHeight - this.crouchHeight);
             console.log('下蹲');
         } else if (!this.keys.crouch && this.isCrouching) {
             // 从下蹲到站立
-            // 检查头顶是否有空间站起来
-            const canStandUp = this.checkHeadroom();
+            // 检查头顶是否有空间站起来（仅在地面上才需要检查）
+            const canStandUp = this.isJumping ? true : this.checkHeadroom();
             if (canStandUp) {
                 this.isCrouching = false;
                 this.height = this.standingHeight;
-                this.moveSpeed = this.standingSpeed;
-                // 调整相机高度
-                this.position.y += (this.standingHeight - this.crouchHeight);
                 console.log('站立');
             } else {
                 console.log('头顶空间不足，无法站立');
             }
+        }
+    }
+    
+    // 更新相机高度，实现平滑过渡
+    updateCameraHeight(delta) {
+        // 当前和目标眼睛高度
+        const currentEyeHeight = this.pitchObject.position.y;
+        const targetEyeHeight = this.isCrouching ? this.crouchEyeOffset : this.eyeOffset;
+        
+        // 如果当前高度与目标高度不同，则平滑过渡
+        if (Math.abs(currentEyeHeight - targetEyeHeight) > 0.01) {
+            // 平滑过渡到目标高度
+            const diff = targetEyeHeight - currentEyeHeight;
+            this.pitchObject.position.y += diff * this.crouchAnimationSpeed * delta;
+        } else {
+            // 已接近目标高度，直接设置为目标高度
+            this.pitchObject.position.y = targetEyeHeight;
         }
     }
     
