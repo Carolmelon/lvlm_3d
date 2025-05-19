@@ -21,12 +21,8 @@ scene.background = new THREE.Color(0x87ceeb); // 天空蓝
 // 1000 - 远裁剪面，比这个距离更远的物体不会被渲染
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// 设置相机的初始位置
-// 参数说明:
-// x=0 - 相机在x轴上的位置(左右)
-// y=2 - 相机在y轴上的位置(上下)，值为2表示相机位于地面上方2个单位
-// z=5 - 相机在z轴上的位置(前后)，值为5表示相机在场景原点前方5个单位
-camera.position.set(0, 2, 5);
+// 设置相机位置为原点
+camera.position.set(0, 0, 0);
 
 // 创建渲染器
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -65,8 +61,11 @@ const world = new World(scene, loadingManager);
 // 传入camera参数是为了将相机附加到玩家对象上，实现第一人称视角
 // 传入world.getGround()参数是为了进行碰撞检测，确保玩家不会穿过地面
 const player = new Player(camera, world.getGround());
-// 将玩家视角控制器添加到场景中
+player.pitchObject.position.y = 2; // 设置pitchObject的高度
 scene.add(player.yawObject);
+
+// 注册可碰撞对象
+player.registerCollidableObjects(world.getCollidableObjects());
 
 if (DEBUG_MODE) {
     controls = new OrbitControls(camera, renderer.domElement);
@@ -145,6 +144,7 @@ function animate() {
             left: player.keys.left,
             right: player.keys.right
         },
+        collisions: player.collidableObjects.length, // 显示碰撞对象数量
         locked: document.pointerLockElement === document.body
     });
     

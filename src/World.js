@@ -8,6 +8,7 @@ export class World {
         this.objects = [];
         this.trees = [];
         this.rocks = [];
+        this.collidableObjects = []; // 可碰撞对象列表
         this.ground = null;
         this.terrainSize = 500;
         this.noise = new SimplexNoise();
@@ -136,7 +137,16 @@ export class World {
             this.scene.add(leaves);
             
             // 将树添加到集合中
-            this.trees.push({ trunk, leaves, position: new THREE.Vector3(x, height, z) });
+            const treeObject = { 
+                trunk, 
+                leaves, 
+                position: new THREE.Vector3(x, height, z),
+                type: 'tree'
+            };
+            this.trees.push(treeObject);
+            
+            // 添加到可碰撞对象列表
+            this.collidableObjects.push(treeObject);
         }
     }
     
@@ -172,7 +182,16 @@ export class World {
             this.scene.add(rock);
             
             // 将岩石添加到集合中
-            this.rocks.push({ mesh: rock, position: new THREE.Vector3(x, height, z) });
+            const rockObject = { 
+                mesh: rock, 
+                position: new THREE.Vector3(x, height, z),
+                scale: scale,
+                type: 'rock'
+            };
+            this.rocks.push(rockObject);
+            
+            // 添加到可碰撞对象列表
+            this.collidableObjects.push(rockObject);
         }
     }
     
@@ -201,6 +220,11 @@ export class World {
         
         // 实现简单的"无限"世界 - 当玩家移动时，世界会更新
         // 在实际游戏中，可以实现更复杂的区块加载系统
+    }
+    
+    // 获取可碰撞对象列表
+    getCollidableObjects() {
+        return this.collidableObjects;
     }
     
     // 获取地面对象（用于碰撞检测）

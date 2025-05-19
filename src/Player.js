@@ -10,11 +10,15 @@ export class Player {
         this.gravity = 20;
         
         // 玩家状态
-        this.position = new THREE.Vector3(0, 0, 0);
-        this.velocity = new THREE.Vector3(0, 0, 0);
-        this.direction = new THREE.Vector3(0, 0, 0);
-        this.isJumping = false;
+        this.position = new THREE.Vector3(0, 0, 0);  // 位置
+        this.velocity = new THREE.Vector3(0, 0, 0); // 速度
+        this.direction = new THREE.Vector3(0, 0, 0); // 方向
+        this.isJumping = false; // 是否跳跃
         this.height = 1.8; // 玩家高度
+        
+        // 碰撞参数
+        this.radius = 0.5; // 玩家碰撞半径
+        this.collidableObjects = []; // 可碰撞对象列表
         
         // 输入控制
         this.keys = {
@@ -126,6 +130,55 @@ export class Player {
         }
     }
     
+    // 注册可碰撞对象
+    registerCollidableObjects(objects) {
+        this.collidableObjects = objects;
+    }
+    
+    // 检测与物体的碰撞
+    checkObjectCollisions() {
+        // 创建一个表示玩家位置的向量（不含y轴高度）
+        const playerPosition = new THREE.Vector2(this.position.x, this.position.z);
+        
+        // 检查所有可碰撞对象
+        for (const object of this.collidableObjects) {
+            if (!object.position) continue;
+            
+            // 创建物体位置向量（不含y轴高度）
+            const objectPosition = new THREE.Vector2(object.position.x, object.position.z);
+            
+            // 计算距离
+            const distance = playerPosition.distanceTo(objectPosition);
+            
+            // 根据物体类型获取碰撞半径
+            let collisionRadius = 0;
+            
+            if (object.type === 'tree') {
+                collisionRadius = 1.0; // 树木碰撞半径
+            } else if (object.type === 'rock') {
+                collisionRadius = object.scale || 1.0; // 岩石碰撞半径
+            }
+            
+            // 检查碰撞
+            const minDistance = this.radius + collisionRadius;
+            if (distance < minDistance) {
+                // 发生碰撞，计算推力方向
+                const pushDirection = new THREE.Vector2()
+                    .subVectors(playerPosition, objectPosition)
+                    .normalize()
+                    .multiplyScalar(minDistance - distance);
+                
+                // 应用推力
+                this.position.x += pushDirection.x;
+                this.position.z += pushDirection.y;
+                
+                return true; // 发生了碰撞
+            }
+        }
+        
+        return false; // 没有碰撞
+    }
+    
     update(delta) {
         if (!this.ground) return;
         
@@ -168,6 +221,9 @@ export class Player {
             this.isJumping = true;
         }
         
+        // 保存当前位置用于碰撞恢复
+        const previousPosition = this.position.clone();
+        
         // 应用速度到位置
         this.position.x += this.direction.x * this.moveSpeed * delta;
         this.position.z += this.direction.z * this.moveSpeed * delta;
@@ -181,6 +237,14 @@ export class Player {
             this.position.y = groundHeight + this.height;
             this.velocity.y = 0;
             this.isJumping = false;
+        }
+        
+        // 检测与物体的碰撞
+        if (this.checkObjectCollisions()) {
+            // 如果发生严重碰撞，回退到上一个位置
+            if (this.checkObjectCollisions()) {
+                this.position.copy(previousPosition);
+            }
         }
         
         // 更新相机位置
