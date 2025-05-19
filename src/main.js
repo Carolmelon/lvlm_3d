@@ -13,7 +13,19 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb); // 天空蓝
 
 // 创建相机
+// 创建透视相机
+// 参数说明:
+// 75 - 视场角(FOV)，表示相机视野的广度，单位是度
+// window.innerWidth / window.innerHeight - 相机视口的宽高比，通常设置为屏幕宽高比
+// 0.1 - 近裁剪面，比这个距离更近的物体不会被渲染
+// 1000 - 远裁剪面，比这个距离更远的物体不会被渲染
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// 设置相机的初始位置
+// 参数说明:
+// x=0 - 相机在x轴上的位置(左右)
+// y=2 - 相机在y轴上的位置(上下)，值为2表示相机位于地面上方2个单位
+// z=5 - 相机在z轴上的位置(前后)，值为5表示相机在场景原点前方5个单位
 camera.position.set(0, 2, 5);
 
 // 创建渲染器
