@@ -15,6 +15,11 @@ export class Player {
         this.direction = new THREE.Vector3(0, 0, 0); // 方向
         this.isJumping = false; // 是否跳跃
         this.height = 1.8; // 玩家高度
+        this.standingHeight = 1.8; // 站立时的高度
+        this.crouchHeight = 0.9; // 下蹲时的高度
+        this.isCrouching = false; // 是否下蹲
+        this.standingSpeed = 10; // 站立时的速度
+        this.crouchSpeed = 5; // 下蹲时的速度
         
         // 碰撞参数
         this.radius = 0.5; // 玩家碰撞半径
@@ -26,7 +31,8 @@ export class Player {
             backward: false,
             left: false,
             right: false,
-            jump: false
+            jump: false,
+            crouch: false
         };
         
         // 鼠标控制
@@ -89,6 +95,10 @@ export class Player {
                     this.keys.jump = true;
                 }
                 break;
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                this.keys.crouch = true;
+                break;
         }
     }
     
@@ -112,6 +122,10 @@ export class Player {
                 break;
             case 'Space':
                 this.keys.jump = false;
+                break;
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                this.keys.crouch = false;
                 break;
         }
     }
@@ -150,33 +164,82 @@ export class Player {
             // 计算距离
             const distance = playerPosition.distanceTo(objectPosition);
             
-            // 根据物体类型获取碰撞半径
+            // 根据物体类型获取碰撞半径和高度
             let collisionRadius = 0;
+            let objectTopHeight = 0;
             
             if (object.type === 'tree') {
                 collisionRadius = 1.0; // 树木碰撞半径
+                objectTopHeight = object.height + object.trunkHeight; // 树干顶部高度
             } else if (object.type === 'rock') {
                 collisionRadius = object.scale || 1.0; // 岩石碰撞半径
+                objectTopHeight = object.height + object.scale; // 岩石顶部高度
             }
             
             // 检查碰撞
             const minDistance = this.radius + collisionRadius;
             if (distance < minDistance) {
-                // 发生碰撞，计算推力方向
-                const pushDirection = new THREE.Vector2()
-                    .subVectors(playerPosition, objectPosition)
-                    .normalize()
-                    .multiplyScalar(minDistance - distance);
+                // 计算玩家底部高度
+                const playerBottomHeight = this.position.y - this.height;
                 
-                // 应用推力
-                this.position.x += pushDirection.x;
-                this.position.z += pushDirection.y;
-                
-                return true; // 发生了碰撞
+                // 只有当玩家在物体侧面区域时才应用侧面碰撞推力
+                // 如果玩家已经在物体上方或即将落在物体上方，不应用侧面碰撞
+                if (playerBottomHeight < objectTopHeight - 0.3) {
+                    // 发生侧面碰撞，计算推力方向
+                    const pushDirection = new THREE.Vector2()
+                        .subVectors(playerPosition, objectPosition)
+                        .normalize()
+                        .multiplyScalar(minDistance - distance);
+                    
+                    // 应用推力
+                    this.position.x += pushDirection.x;
+                    this.position.z += pushDirection.y;
+                    
+                    return true; // 发生了碰撞
+                }
             }
         }
         
         return false; // 没有碰撞
+    }
+    
+    // 检查玩家是否站在物体上面
+    checkStandingOnObject() {
+        // 只有当玩家下落或站立时才检查
+        if (this.velocity.y > 0) return null;
+        
+        const playerPosition = new THREE.Vector2(this.position.x, this.position.z);
+        
+        // 检查玩家下方是否有物体
+        for (const object of this.collidableObjects) {
+            if (!object.position) continue;
+            
+            const objectPosition = new THREE.Vector2(object.position.x, object.position.z);
+            const distance = playerPosition.distanceTo(objectPosition);
+            
+            let collisionRadius = 0;
+            let objectTopHeight = 0;
+            
+            if (object.type === 'tree') {
+                collisionRadius = 1.0;
+                objectTopHeight = object.height + object.trunkHeight; // 使用树干顶部高度
+            } else if (object.type === 'rock') {
+                collisionRadius = object.scale || 1.0;
+                objectTopHeight = object.height + object.scale; // 使用岩石顶部高度
+            }
+            
+            // 检查玩家是否在物体上方
+            if (distance < this.radius + collisionRadius) {
+                // 检查高度是否合适（玩家位置应该在物体顶部附近）
+                const playerBottomHeight = this.position.y - this.height;
+                if (Math.abs(playerBottomHeight - objectTopHeight) < 0.5) {
+                    console.log(`玩家站在${object.type}上面，高度:${objectTopHeight}`);
+                    return objectTopHeight;
+                }
+            }
+        }
+        
+        return null;
     }
     
     update(delta) {
@@ -186,6 +249,9 @@ export class Player {
         if (this.keys.forward || this.keys.backward || this.keys.left || this.keys.right) {
             console.log('移动状态:', this.keys);
         }
+        
+        // 处理下蹲状态
+        this.handleCrouching();
         
         // 计算移动方向
         this.direction.set(0, 0, 0);
@@ -216,7 +282,8 @@ export class Player {
         // 应用重力和跳跃
         this.velocity.y -= this.gravity * delta;
         
-        if (this.keys.jump && !this.isJumping) {
+        // 下蹲状态下不能跳跃
+        if (this.keys.jump && !this.isJumping && !this.isCrouching) {
             this.velocity.y = this.jumpForce;
             this.isJumping = true;
         }
@@ -224,16 +291,28 @@ export class Player {
         // 保存当前位置用于碰撞恢复
         const previousPosition = this.position.clone();
         
+        // 根据姿态调整移动速度
+        const currentSpeed = this.isCrouching ? this.crouchSpeed : this.moveSpeed;
+        
         // 应用速度到位置
-        this.position.x += this.direction.x * this.moveSpeed * delta;
-        this.position.z += this.direction.z * this.moveSpeed * delta;
+        this.position.x += this.direction.x * currentSpeed * delta;
+        this.position.z += this.direction.z * currentSpeed * delta;
         this.position.y += this.velocity.y * delta;
         
         // 检测与地面的碰撞
         const groundHeight = this.getGroundHeight(this.position.x, this.position.z);
         
+        // 检查是否站在物体上
+        const objectHeight = this.checkStandingOnObject();
+        
+        // 如果站在物体上
+        if (objectHeight !== null && this.position.y <= objectHeight + this.height) {
+            this.position.y = objectHeight + this.height;
+            this.velocity.y = 0;
+            this.isJumping = false;
+        }
         // 如果在地面以下，将位置调整到地面上
-        if (this.position.y <= groundHeight + this.height) {
+        else if (this.position.y <= groundHeight + this.height) {
             this.position.y = groundHeight + this.height;
             this.velocity.y = 0;
             this.isJumping = false;
@@ -249,6 +328,83 @@ export class Player {
         
         // 更新相机位置
         this.yawObject.position.copy(this.position);
+    }
+    
+    // 处理下蹲状态
+    handleCrouching() {
+        // 如果在空中，不能下蹲
+        if (this.isJumping) {
+            this.keys.crouch = false;
+            if (this.isCrouching) {
+                this.isCrouching = false;
+                this.height = this.standingHeight;
+                this.moveSpeed = this.standingSpeed;
+                // 调整相机高度
+                this.position.y += (this.standingHeight - this.crouchHeight);
+            }
+            return;
+        }
+        
+        // 处理下蹲状态变化
+        if (this.keys.crouch && !this.isCrouching) {
+            // 从站立到下蹲
+            this.isCrouching = true;
+            this.height = this.crouchHeight;
+            this.moveSpeed = this.crouchSpeed;
+            // 调整相机高度，保持双脚位置不变
+            this.position.y -= (this.standingHeight - this.crouchHeight);
+            console.log('下蹲');
+        } else if (!this.keys.crouch && this.isCrouching) {
+            // 从下蹲到站立
+            // 检查头顶是否有空间站起来
+            const canStandUp = this.checkHeadroom();
+            if (canStandUp) {
+                this.isCrouching = false;
+                this.height = this.standingHeight;
+                this.moveSpeed = this.standingSpeed;
+                // 调整相机高度
+                this.position.y += (this.standingHeight - this.crouchHeight);
+                console.log('站立');
+            } else {
+                console.log('头顶空间不足，无法站立');
+            }
+        }
+    }
+    
+    // 检查头顶是否有足够空间站起来
+    checkHeadroom() {
+        // 检查头顶是否有障碍物
+        for (const object of this.collidableObjects) {
+            if (!object.position) continue;
+            
+            const playerPosition = new THREE.Vector2(this.position.x, this.position.z);
+            const objectPosition = new THREE.Vector2(object.position.x, object.position.z);
+            const distance = playerPosition.distanceTo(objectPosition);
+            
+            let collisionRadius = 0;
+            let objectBottomHeight = 0;
+            
+            if (object.type === 'tree') {
+                collisionRadius = 1.0;
+                objectBottomHeight = object.height; // 树的底部高度
+            } else if (object.type === 'rock') {
+                collisionRadius = object.scale || 1.0;
+                objectBottomHeight = object.height; // 岩石的底部高度
+            }
+            
+            // 如果玩家在物体下方
+            if (distance < this.radius + collisionRadius) {
+                // 检查物体底部是否在玩家当前位置和站立高度之间
+                const playerCurrentTop = this.position.y;
+                const playerStandingTop = playerCurrentTop + (this.standingHeight - this.crouchHeight);
+                
+                if (objectBottomHeight < playerStandingTop && objectBottomHeight > playerCurrentTop) {
+                    return false; // 空间不足，无法站立
+                }
+            }
+        }
+        
+        return true; // 可以站立
     }
     
     // 获取地面高度

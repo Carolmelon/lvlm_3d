@@ -124,14 +124,14 @@ export class World {
             
             // 创建树干
             const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-            trunk.position.set(x, height + 1, z);
+            trunk.position.set(x, height + 1, z); // 树干底部在地面上，高度为地面高度+1
             trunk.castShadow = true;
             trunk.receiveShadow = true;
             this.scene.add(trunk);
             
             // 创建树冠
             const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-            leaves.position.set(x, height + 4, z);
+            leaves.position.set(x, height + 4, z); // 树冠底部在树干顶部，高度为地面高度+4
             leaves.castShadow = true;
             leaves.receiveShadow = true;
             this.scene.add(leaves);
@@ -140,7 +140,9 @@ export class World {
             const treeObject = { 
                 trunk, 
                 leaves, 
-                position: new THREE.Vector3(x, height, z),
+                position: new THREE.Vector3(x, height, z), // 树的底部位置
+                height: height, // 地面高度
+                trunkHeight: 2, // 树干高度
                 type: 'tree'
             };
             this.trees.push(treeObject);
@@ -169,7 +171,7 @@ export class World {
             // 创建不同大小的岩石
             const scale = 0.5 + Math.random() * 1.5;
             const rock = new THREE.Mesh(rockGeometry, rockMaterial);
-            rock.position.set(x, height + scale * 0.5, z);
+            rock.position.set(x, height + scale * 0.5, z); // 岩石底部在地面上，中心高度为地面高度+半径
             rock.scale.set(scale, scale, scale);
             
             // 随机旋转
@@ -184,8 +186,9 @@ export class World {
             // 将岩石添加到集合中
             const rockObject = { 
                 mesh: rock, 
-                position: new THREE.Vector3(x, height, z),
-                scale: scale,
+                position: new THREE.Vector3(x, height, z), // 岩石底部位置
+                height: height, // 地面高度
+                scale: scale, // 岩石尺寸
                 type: 'rock'
             };
             this.rocks.push(rockObject);

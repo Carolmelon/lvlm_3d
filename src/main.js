@@ -145,6 +145,7 @@ function animate() {
             right: player.keys.right
         },
         collisions: player.collidableObjects.length, // 显示碰撞对象数量
+        standing: player.isJumping ? "空中" : (player.isCrouching ? "下蹲" : "站立"), // 显示玩家状态
         locked: document.pointerLockElement === document.body
     });
     
