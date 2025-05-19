@@ -45,9 +45,13 @@ let controls = null;
 const DEBUG_MODE = false;
 
 // 创建世界
+// 传入scene参数是为了让World类能够将生成的地形、树木、岩石等对象添加到场景中
+// 传入loadingManager参数是为了管理纹理加载过程，提供加载进度反馈和错误处理
 const world = new World(scene, loadingManager);
 
 // 创建玩家
+// 传入camera参数是为了将相机附加到玩家对象上，实现第一人称视角
+// 传入world.getGround()参数是为了进行碰撞检测，确保玩家不会穿过地面
 const player = new Player(camera, world.getGround());
 // 将玩家视角控制器添加到场景中
 scene.add(player.yawObject);
@@ -83,6 +87,11 @@ let lastFpsUpdate = 0;
 
 // 动画循环
 function animate() {
+    // requestAnimationFrame是浏览器提供的一个API，用于在下一次重绘之前调用指定的回调函数
+    // 它比setTimeout更适合实现动画，因为它会在浏览器重绘前执行，保证动画流畅
+    // 当页面不可见时（如切换标签页），浏览器会暂停执行，从而节省CPU资源
+    // 它会传递一个时间戳参数给回调函数，可用于计算动画的下一帧
+    // 返回值是一个请求ID，可以传递给cancelAnimationFrame()来取消回调
     requestAnimationFrame(animate);
     
     const time = performance.now();

@@ -49,6 +49,19 @@
             text-align: center;
             cursor: pointer;
         }
+        #lock-error {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff6b6b;
+            background-color: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
         #debug {
             position: absolute;
             bottom: 10px;
@@ -65,20 +78,46 @@
 <body>
     <div id="loading">正在加载世界...</div>
     <div id="start-prompt">点击此处开始游戏<br>（锁定鼠标指针）</div>
+    <div id="lock-error">锁定鼠标失败，请再次点击或检查浏览器设置</div>
     <div id="info">
         WASD或方向键移动 | 鼠标控制视角 | 空格跳跃 | H键显示/隐藏此提示
     </div>
     <div id="debug"></div>
     <script type="module" src="/src/main.js"></script>
     <script>
-        document.getElementById('start-prompt').addEventListener('click', function() {
-            document.body.requestPointerLock();
-            this.style.display = 'none';
+        const startPrompt = document.getElementById('start-prompt');
+        const lockError = document.getElementById('lock-error');
+        
+        startPrompt.addEventListener('click', function() {
+            // 尝试锁定鼠标指针
+            try {
+                document.body.requestPointerLock();
+                
+                // 如果已经显示了错误信息，点击后先隐藏
+                lockError.style.display = 'none';
+                
+                // 设置一个超时检查，确保锁定成功
+                setTimeout(function() {
+                    if (document.pointerLockElement !== document.body) {
+                        // 锁定失败，显示错误提示
+                        lockError.style.display = 'block';
+                        startPrompt.style.display = 'block';
+                    }
+                }, 100);
+            } catch (error) {
+                console.error('锁定鼠标失败:', error);
+                lockError.style.display = 'block';
+            }
         });
         
         document.addEventListener('pointerlockchange', function() {
-            if (document.pointerLockElement !== document.body) {
-                document.getElementById('start-prompt').style.display = 'block';
+            if (document.pointerLockElement === document.body) {
+                // 锁定成功
+                startPrompt.style.display = 'none';
+                lockError.style.display = 'none';
+            } else {
+                // 锁定解除
+                startPrompt.style.display = 'block';
             }
         });
     </script>

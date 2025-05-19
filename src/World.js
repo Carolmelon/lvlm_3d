@@ -65,13 +65,20 @@ export class World {
         groundTexture.repeat.set(25, 25);
         groundTexture.anisotropy = 16;
         
+        // THREE.MeshStandardMaterial是Three.js中的一种基于物理渲染(PBR)的材质
+        // 它模拟真实世界的材质表现，支持金属度(metalness)和粗糙度(roughness)参数
+        // map: 颜色贴图，用于定义材质的基本颜色
+        // roughness: 粗糙度，值从0到1，0表示完全光滑(镜面反射)，1表示完全粗糙(漫反射)
+        // metalness: 金属度，值从0到1，0表示非金属材质，1表示金属材质
         const terrainMaterial = new THREE.MeshStandardMaterial({
-            map: groundTexture,
-            roughness: 0.8,
-            metalness: 0.1
+            map: groundTexture,     // 应用地面纹理
+            roughness: 0.8,         // 较高的粗糙度，使地面看起来不光滑
+            metalness: 0.1          // 低金属度，因为地面通常不是金属
         });
         
         // 创建地形网格
+        // 这里的mesh是指3D网格对象，它由几何体(geometry)和材质(material)组成
+        // 在这里，我们创建了一个表示地形的网格对象，使用之前定义的地形几何体和材质
         this.ground = new THREE.Mesh(geometry, terrainMaterial);
         this.ground.castShadow = false;
         this.ground.receiveShadow = true;

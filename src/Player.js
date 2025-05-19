@@ -45,10 +45,8 @@ export class Player {
         // 添加鼠标事件监听
         document.addEventListener('mousemove', this.onMouseMove.bind(this), false);
         
-        // 锁定鼠标指针
-        document.addEventListener('click', () => {
-            document.body.requestPointerLock();
-        });
+        // 移除了通用的click事件监听器，防止任何地方点击就锁定鼠标
+        // 现在锁定鼠标只能通过点击start-prompt元素实现
         
         // 显示锁定状态的提示
         document.addEventListener('pointerlockchange', () => {
