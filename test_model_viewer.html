@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLB Model Viewer & Animation Check</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Loading model...</div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.159.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.159.0/examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, controls;
+        let mixer, clock;
+        const infoElement = document.getElementById('info');
+
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xcccccc);
+            scene.fog = new THREE.FogExp2(0xcccccc, 0.002);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(2, 2, 5); // Adjust as needed
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 1;
+            controls.maxDistance = 50;
+            controls.maxPolarAngle = Math.PI / 2;
+
+            // Lights
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1);
+            hemiLight.position.set(0, 20, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(-3, 10, -10);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.top = 4;
+            dirLight.shadow.camera.bottom = -4;
+            dirLight.shadow.camera.left = -4;
+            dirLight.shadow.camera.right = 4;
+            dirLight.shadow.camera.near = 0.1;
+            dirLight.shadow.camera.far = 40;
+            scene.add(dirLight);
+
+            // Ground (optional, for context)
+            const groundGeo = new THREE.PlaneGeometry(100, 100);
+            const groundMat = new THREE.MeshPhongMaterial({ color: 0x999999, depthWrite: false });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Clock for animation
+            clock = new THREE.Clock();
+
+            // Load Model
+            loadModel();
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize, false);
+
+            animate();
+        }
+
+        function loadModel() {
+            const loader = new GLTFLoader();
+            // IMPORTANT: The path '/models/player_model.glb' assumes this HTML is served
+            // from the root of your 'threejs' project, and 'public' folder contents
+            // are accessible at the root level by the server.
+            // If you are running Vite, this path should work when accessing test_model_viewer.html
+            // via the Vite dev server (e.g., http://localhost:5173/test_model_viewer.html)
+            loader.load(
+                '/models/player_model.glb', // Path to your model
+                function (gltf) {
+                    const model = gltf.scene;
+                    model.position.set(0, 0, 0); // Adjust as needed for your model's pivot
+                    
+                    // Optional: Scale model if it's too big or too small
+                    // model.scale.set(0.1, 0.1, 0.1);
+
+                    // Enable shadows for all meshes in the model
+                    model.traverse(function (object) {
+                        if (object.isMesh) {
+                            object.castShadow = true;
+                            object.receiveShadow = true;
+                        }
+                    });
+
+                    scene.add(model);
+                    infoElement.innerHTML = 'Model loaded.<br>';
+
+                    // Check for animations
+                    if (gltf.animations && gltf.animations.length) {
+                        infoElement.innerHTML += 'Animations found:<br>';
+                        console.log("Animations found in the model:");
+                        gltf.animations.forEach((clip, index) => {
+                            infoElement.innerHTML += `- ${clip.name || `Animation ${index}`}<br>`;
+                            console.log(`- Name: "${clip.name}", Duration: ${clip.duration.toFixed(2)}s`);
+                        });
+
+                        // Play the first animation
+                        mixer = new THREE.AnimationMixer(model);
+                        const firstClip = gltf.animations[0];
+                        const action = mixer.clipAction(firstClip);
+                        action.play();
+                        infoElement.innerHTML += `<br>Playing: "${firstClip.name || 'Animation 0'}"`;
+                        console.log(`Playing animation: "${firstClip.name || 'Animation 0'}"`);
+                    } else {
+                        infoElement.innerHTML += 'No animations found in the model.';
+                        console.log("No animations found in the model.");
+                    }
+                },
+                // onProgress callback (optional)
+                function (xhr) {
+                    const percentLoaded = (xhr.loaded / xhr.total * 100).toFixed(0);
+                    infoElement.textContent = `Loading model: ${percentLoaded}%`;
+                    // console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                },
+                // onError callback
+                function (error) {
+                    infoElement.textContent = 'Error loading model. Check console.';
+                    console.error('Error loading GLB model:', error);
+                }
+            );
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            if (mixer) {
+                mixer.update(delta);
+            }
+            controls.update(); // Only if OrbitControls are used
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
