@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export class Player {
-    constructor(camera, ground) {
+    constructor(camera, ground, scene) {
         // 玩家参数
         this.camera = camera;
         this.ground = ground;
@@ -74,6 +74,14 @@ export class Player {
             ThumbsUp: 'ThumbsUp'
         };
         
+        // 添加场景引用
+        this.scene = scene;
+        
+        // 添加旋转相关参数
+        this.currentRotation = 0;  // 当前旋转角度
+        this.targetRotation = 0;   // 目标旋转角度
+        this.rotationSpeed = 10;   // 旋转速度系数
+        
         // 初始化
         this.init();
     }
@@ -101,7 +109,8 @@ export class Player {
         loader.load(modelURL, (gltf) => {
             this.model = gltf.scene;
             this.model.scale.set(0.5, 0.5, 0.5);
-            this.model.position.y = 0;
+            this.model.position.copy(this.position);
+            this.model.position.y = this.position.y - this.height + 0.5;
             this.model.visible = false; // 在第一人称模式下默认隐藏模型
             
             // 处理阴影
@@ -112,15 +121,8 @@ export class Player {
                 }
             });
             
-            // 将模型添加到yawObject
-            this.yawObject.add(this.model);
-            
-            // 调整模型位置让它站在地面上
-            this.model.position.y = -this.height + 0.5;
-            
-            // 重要：确保模型默认面向Z轴负方向（前方）
-            // 移除原先的固定旋转，让模型可以完全由移动方向控制
-            this.model.rotation.y = 0;
+            // 将模型添加到场景中，而不是yawObject
+            this.scene.add(this.model);
             
             // 设置动画混合器
             this.mixer = new THREE.AnimationMixer(this.model);
@@ -417,6 +419,16 @@ export class Player {
         return null;
     }
     
+    // 添加平滑旋转辅助函数
+    lerpAngle(start, end, t) {
+        // 确保角度差在 -PI 到 PI 之间
+        let diff = end - start;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        
+        return start + diff * t;
+    }
+    
     update(delta, viewMode = 'first-person') {
         if (!this.ground) return;
         
@@ -450,6 +462,8 @@ export class Player {
         }
         
         // 根据视图模式调整移动方向
+        let moveDirection = new THREE.Vector3(0, 0, 0);
+        
         if (viewMode === 'first-person') {
             // 第一人称模式：使用yawObject的旋转
             const rotationMatrix = new THREE.Matrix4();
@@ -472,7 +486,7 @@ export class Player {
             cameraRight.normalize();
             
             // 根据按键输入计算最终方向
-            const moveDirection = new THREE.Vector3(0, 0, 0);
+            moveDirection = new THREE.Vector3(0, 0, 0);
             if (this.keys.forward) moveDirection.add(cameraDirection);
             if (this.keys.backward) moveDirection.sub(cameraDirection);
             if (this.keys.left) moveDirection.sub(cameraRight);
@@ -481,19 +495,6 @@ export class Player {
             if (moveDirection.length() > 0) {
                 moveDirection.normalize();
                 this.direction.copy(moveDirection);
-                
-                // 如果角色正在移动，则旋转模型面向移动方向
-                if (this.model && this.model.visible) {
-                    // 计算目标角度（使用移动方向计算）
-                    const targetAngle = Math.atan2(moveDirection.x, moveDirection.z);
-                    
-                    // 直接设置模型的旋转，确保模型始终面向移动方向
-                    this.model.rotation.y = targetAngle;
-                    
-                    // 调试输出
-                    console.log("移动方向:", moveDirection.x.toFixed(2), moveDirection.z.toFixed(2),
-                              "目标角度:", targetAngle.toFixed(2));
-                }
             }
         }
         
@@ -551,6 +552,28 @@ export class Player {
         // 更新相机高度，仅在第一人称视图下才执行
         if (viewMode === 'first-person') {
             this.updateCameraHeight(delta);
+        }
+        
+        // 在第三人称模式下更新模型位置和旋转
+        if (viewMode === 'third-person' && this.model) {
+            // 更新模型位置
+            this.model.position.copy(this.position);
+            this.model.position.y = this.position.y - this.height + 0.5;
+
+            // 只在移动时更新目标旋转角度
+            if (moveDirection.length() > 0) {
+                this.targetRotation = Math.atan2(moveDirection.x, moveDirection.z);
+            }
+
+            // 平滑插值到目标旋转角度
+            this.currentRotation = this.lerpAngle(
+                this.currentRotation,
+                this.targetRotation,
+                delta * this.rotationSpeed
+            );
+
+            // 应用旋转
+            this.model.rotation.y = this.currentRotation;
         }
         
         // 更新动画

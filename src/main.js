@@ -60,7 +60,8 @@ const world = new World(scene, loadingManager);
 // 创建玩家
 // 传入camera参数是为了将相机附加到玩家对象上，实现第一人称视角
 // 传入world.getGround()参数是为了进行碰撞检测，确保玩家不会穿过地面
-const player = new Player(camera, world.getGround());
+// 传入scene参数是为了管理模型的添加和移除
+const player = new Player(camera, world.getGround(), scene);
 player.pitchObject.position.y = 2; // 设置pitchObject的高度
 scene.add(player.yawObject);
 
