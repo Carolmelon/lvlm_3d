@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export class Player {
     constructor(camera, ground) {
@@ -50,6 +51,29 @@ export class Player {
         this.pitchObject.add(camera);
         this.yawObject.add(this.pitchObject);
         
+        // 角色模型相关
+        this.model = null;
+        this.mixer = null;
+        this.actions = {};
+        this.activeAction = null;
+        this.previousAction = null;
+        this.currentBaseAction = 'Idle'; // 默认动画状态
+        this.animationStates = {
+            Idle: 'Idle',
+            Walking: 'Walking',
+            Running: 'Running',
+            Dance: 'Dance',
+            Jump: 'Jump',
+            Death: 'Death',
+            Sitting: 'Sitting',
+            Standing: 'Standing',
+            Yes: 'Yes',
+            No: 'No',
+            Wave: 'Wave',
+            Punch: 'Punch',
+            ThumbsUp: 'ThumbsUp'
+        };
+        
         // 初始化
         this.init();
     }
@@ -62,20 +86,138 @@ export class Player {
         // 添加鼠标事件监听
         document.addEventListener('mousemove', this.onMouseMove.bind(this), false);
         
-        // 移除了通用的click事件监听器，防止任何地方点击就锁定鼠标
-        // 现在锁定鼠标只能通过点击start-prompt元素实现
-        
-        // 显示锁定状态的提示
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === document.body) {
-                console.log('鼠标已锁定');
-            } else {
-                console.log('鼠标已解锁');
-            }
-        });
+        // 载入角色模型
+        this.loadCharacterModel();
         
         // 更新初始位置到地面上
         this.updatePositionToGround();
+    }
+    
+    // 加载角色模型
+    loadCharacterModel() {
+        const modelURL = 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb';
+        const loader = new GLTFLoader();
+        
+        loader.load(modelURL, (gltf) => {
+            this.model = gltf.scene;
+            this.model.scale.set(0.5, 0.5, 0.5);
+            this.model.position.y = 0;
+            this.model.visible = false; // 在第一人称模式下默认隐藏模型
+            
+            // 处理阴影
+            this.model.traverse(function (object) {
+                if (object.isMesh) {
+                    object.castShadow = true;
+                    object.receiveShadow = true;
+                }
+            });
+            
+            // 将模型添加到yawObject
+            this.yawObject.add(this.model);
+            
+            // 调整模型位置让它站在地面上
+            this.model.position.y = -this.height + 0.5;
+            
+            // 重要：确保模型默认面向Z轴负方向（前方）
+            // 移除原先的固定旋转，让模型可以完全由移动方向控制
+            this.model.rotation.y = 0;
+            
+            // 设置动画混合器
+            this.mixer = new THREE.AnimationMixer(this.model);
+            
+            // 设置动画动作
+            this.actions = {};
+            gltf.animations.forEach((clip) => {
+                const action = this.mixer.clipAction(clip);
+                this.actions[clip.name] = action;
+                
+                // 设置一次性动画
+                if (['Jump', 'Yes', 'No', 'Wave', 'Punch', 'ThumbsUp', 'Death', 'Sitting', 'Standing'].includes(clip.name)) {
+                    action.loop = THREE.LoopOnce;
+                    action.clampWhenFinished = true;
+                }
+            });
+            
+            // 设置初始动画
+            if (this.actions['Idle']) {
+                this.activeAction = this.actions['Idle'];
+                this.activeAction.play();
+            }
+            
+            console.log('角色模型已加载');
+        }, undefined, (error) => {
+            console.error('加载模型时发生错误:', error);
+        });
+    }
+    
+    // 切换动画
+    fadeToAction(name, duration = 0.2, isOneShot = false) {
+        if (!this.actions[name]) {
+            console.warn(`未找到动画 "${name}"！`);
+            return;
+        }
+        
+        this.previousAction = this.activeAction;
+        this.activeAction = this.actions[name];
+        
+        if (this.previousAction !== this.activeAction) {
+            if (this.previousAction) {
+                this.previousAction.fadeOut(duration);
+            }
+            
+            this.activeAction
+                .reset()
+                .setEffectiveTimeScale(1)
+                .setEffectiveWeight(1)
+                .fadeIn(duration)
+                .play();
+                
+            // 如果是一次性动画，播放完后切回基础状态
+            if (isOneShot && this.mixer) {
+                this.mixer.addEventListener('finished', (e) => {
+                    if (e.action === this.activeAction) {
+                        this.mixer.removeEventListener('finished', arguments.callee);
+                        this.fadeToAction(this.currentBaseAction, 0.2);
+                    }
+                });
+            }
+        }
+    }
+    
+    // 更新动画状态
+    updateAnimation(delta) {
+        if (this.mixer) {
+            this.mixer.update(delta);
+            
+            // 根据玩家状态更新动画
+            if (this.isJumping && this.activeAction !== this.actions['Jump']) {
+                this.fadeToAction('Jump', 0.2, true);
+            } 
+            else if (!this.isJumping) {
+                // 根据移动状态切换动画
+                let newAction = this.currentBaseAction;
+                
+                if (this.keys.forward || this.keys.backward || this.keys.left || this.keys.right) {
+                    if (this.isCrouching) {
+                        newAction = 'Walking'; // 下蹲行走使用普通行走动画
+                    } else {
+                        newAction = 'Running'; // 正常行走使用奔跑动画
+                    }
+                } else {
+                    if (this.isCrouching) {
+                        newAction = 'Sitting'; // 下蹲静止使用坐下动画
+                    } else {
+                        newAction = 'Idle'; // 站立静止使用待机动画
+                    }
+                }
+                
+                // 仅当动画需要改变时才切换
+                if (this.activeAction !== this.actions[newAction] && !this.isJumping) {
+                    this.currentBaseAction = newAction;
+                    this.fadeToAction(newAction, 0.2);
+                }
+            }
+        }
     }
     
     onKeyDown(event) {
@@ -105,6 +247,32 @@ export class Player {
             case 'ShiftLeft':
             case 'ShiftRight':
                 this.keys.crouch = true;
+                break;
+            // 添加触发特殊动画的按键
+            case 'KeyY':
+                if (this.actions && this.actions['Yes']) {
+                    this.fadeToAction('Yes', 0.2, true);
+                }
+                break;
+            case 'KeyN':
+                if (this.actions && this.actions['No']) {
+                    this.fadeToAction('No', 0.2, true);
+                }
+                break;
+            case 'KeyV':
+                if (this.actions && this.actions['Wave']) {
+                    this.fadeToAction('Wave', 0.2, true);
+                }
+                break;
+            case 'KeyP':
+                if (this.actions && this.actions['Punch']) {
+                    this.fadeToAction('Punch', 0.2, true);
+                }
+                break;
+            case 'KeyX':
+                if (this.actions && this.actions['Death']) {
+                    this.fadeToAction('Death', 0.2, true);
+                }
                 break;
         }
     }
@@ -249,7 +417,7 @@ export class Player {
         return null;
     }
     
-    update(delta) {
+    update(delta, viewMode = 'first-person') {
         if (!this.ground) return;
         
         // 输出玩家状态，用于调试
@@ -281,10 +449,72 @@ export class Player {
             this.direction.normalize();
         }
         
-        // 应用相机朝向到移动方向
-        const rotationMatrix = new THREE.Matrix4();
-        rotationMatrix.makeRotationY(this.yawObject.rotation.y);
-        this.direction.applyMatrix4(rotationMatrix);
+        // 根据视图模式调整移动方向
+        if (viewMode === 'first-person') {
+            // 第一人称模式：使用yawObject的旋转
+            const rotationMatrix = new THREE.Matrix4();
+            rotationMatrix.makeRotationY(this.yawObject.rotation.y);
+            this.direction.applyMatrix4(rotationMatrix);
+        } else {
+            // 第三人称模式：使用相机的朝向来确定移动方向
+            
+            // 获取相机前方向量（相机看向的方向）
+            const cameraDirection = new THREE.Vector3(0, 0, -1);
+            const cameraQuaternion = this.camera.getWorldQuaternion(new THREE.Quaternion());
+            cameraDirection.applyQuaternion(cameraQuaternion);
+            cameraDirection.y = 0; // 保持水平
+            cameraDirection.normalize();
+            
+            // 获取相机右方向量
+            const cameraRight = new THREE.Vector3(1, 0, 0);
+            cameraRight.applyQuaternion(cameraQuaternion);
+            cameraRight.y = 0; // 保持水平
+            cameraRight.normalize();
+            
+            // 根据按键输入计算最终方向
+            const moveDirection = new THREE.Vector3(0, 0, 0);
+            if (this.keys.forward) moveDirection.add(cameraDirection);
+            if (this.keys.backward) moveDirection.sub(cameraDirection);
+            if (this.keys.left) moveDirection.sub(cameraRight);
+            if (this.keys.right) moveDirection.add(cameraRight);
+            
+            if (moveDirection.length() > 0) {
+                moveDirection.normalize();
+                this.direction.copy(moveDirection);
+                
+                // 如果角色正在移动，则旋转模型面向移动方向
+                if (this.model && this.model.visible) {
+                    // 计算模型应该旋转的角度，使其面向移动方向
+                    const targetAngle = Math.atan2(moveDirection.x, moveDirection.z);
+                    
+                    // 获取当前世界方向的角度（这里直接使用模型的旋转角度）
+                    // 角色模型与yawObject可能有旋转偏差，这里直接设置模型旋转而不是累加差值
+                    // 注意：我们不再累加旋转差值，而是直接应用目标角度
+                    
+                    // 为了平滑旋转，使用lerp插值
+                    const rotationSpeed = 15 * delta;
+                    
+                    // 使用欧拉角的临时变量来处理角度插值
+                    const currentEuler = new THREE.Euler(0, this.model.rotation.y, 0, 'XYZ');
+                    const targetEuler = new THREE.Euler(0, targetAngle, 0, 'XYZ');
+                    
+                    // 将欧拉角转换为四元数以进行平滑插值
+                    const currentQuaternion = new THREE.Quaternion().setFromEuler(currentEuler);
+                    const targetQuaternion = new THREE.Quaternion().setFromEuler(targetEuler);
+                    
+                    // 进行球面插值，确保平滑旋转
+                    currentQuaternion.slerp(targetQuaternion, rotationSpeed);
+                    
+                    // 将结果应用回模型
+                    this.model.rotation.setFromQuaternion(currentQuaternion);
+                    
+                    // 调试输出
+                    console.log("目标角度:", targetAngle.toFixed(2), 
+                                "当前角度:", this.model.rotation.y.toFixed(2), 
+                                "移动方向:", moveDirection.x.toFixed(2), moveDirection.z.toFixed(2));
+                }
+            }
+        }
         
         // 应用重力和跳跃
         this.velocity.y -= this.gravity * delta;
@@ -337,8 +567,13 @@ export class Player {
         // 更新yaw对象位置
         this.yawObject.position.copy(this.position);
         
-        // 更新相机高度，实现平滑过渡效果
-        this.updateCameraHeight(delta);
+        // 更新相机高度，仅在第一人称视图下才执行
+        if (viewMode === 'first-person') {
+            this.updateCameraHeight(delta);
+        }
+        
+        // 更新动画
+        this.updateAnimation(delta);
     }
     
     // 处理下蹲状态

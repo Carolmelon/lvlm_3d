@@ -96,6 +96,74 @@ let frameCount = 0;
 let fps = 0;
 let lastFpsUpdate = 0;
 
+// 添加视图模式切换功能
+let viewMode = 'first-person'; // 'first-person' 或 'third-person'
+// 保存原始第一人称旋转信息
+let firstPersonRotation = {
+    pitchX: 0,
+    yawY: 0
+};
+
+// 初始化第三人称相机位置
+function setupThirdPersonCamera() {
+    // 设置相机位置在玩家后方
+    const cameraOffset = new THREE.Vector3(0, 5, 10);
+    // 应用当前玩家朝向
+    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yawObject.rotation.y);
+    // 设置相机位置（玩家位置 + 偏移）
+    camera.position.copy(player.position).add(cameraOffset);
+    // 让相机看向玩家
+    camera.lookAt(player.position);
+}
+
+// 切换视图模式
+document.addEventListener('keydown', (event) => {
+    if (event.code === 'KeyT') {
+        // 如果从第一人称切换到第三人称，先保存当前旋转
+        if (viewMode === 'first-person') {
+            firstPersonRotation.pitchX = player.pitchObject.rotation.x;
+            firstPersonRotation.yawY = player.yawObject.rotation.y;
+        }
+        
+        viewMode = viewMode === 'first-person' ? 'third-person' : 'first-person';
+        
+        if (viewMode === 'third-person') {
+            // 切换到第三人称
+            player.pitchObject.remove(camera); // 从pitchObject移除相机
+            scene.add(camera); // 将相机添加到场景
+            setupThirdPersonCamera(); // 设置第三人称相机位置
+            
+            // 显示角色模型
+            if (player.model) {
+                player.model.visible = true;
+                // 调整模型位置到地面
+                player.model.position.y = -player.height + 0.5;
+            }
+        } else {
+            // 切换到第一人称
+            scene.remove(camera); // 从场景移除相机
+            
+            // 重置相机和旋转
+            camera.position.set(0, 0, 0);
+            camera.rotation.set(0, 0, 0);
+            
+            // 恢复原始旋转
+            player.pitchObject.rotation.x = firstPersonRotation.pitchX;
+            player.yawObject.rotation.y = firstPersonRotation.yawY;
+            
+            // 将相机添加回pitchObject
+            player.pitchObject.add(camera);
+            
+            // 隐藏角色模型
+            if (player.model) {
+                player.model.visible = false;
+            }
+        }
+        
+        console.log(`切换到${viewMode === 'first-person' ? '第一人称' : '第三人称'}视图`);
+    }
+});
+
 // 动画循环
 function animate() {
     // requestAnimationFrame是浏览器提供的一个API，用于在下一次重绘之前调用指定的回调函数
@@ -119,7 +187,25 @@ function animate() {
     
     // 更新玩家
     if (!DEBUG_MODE) {
-        player.update(delta);
+        // 根据视图模式更新Player的update方法
+        player.update(delta, viewMode);
+    }
+    
+    // 更新第三人称相机位置
+    if (viewMode === 'third-person') {
+        // 计算理想的相机位置（从后上方观察）
+        const idealOffset = new THREE.Vector3(0, 7, 12);
+        // 应用玩家旋转
+        idealOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yawObject.rotation.y);
+        idealOffset.add(player.position);
+        
+        // 平滑过渡到理想位置
+        camera.position.lerp(idealOffset, 0.1);
+        
+        // 让相机看向玩家上方一点的位置，更自然
+        const targetPosition = player.position.clone();
+        targetPosition.y += 1.5; // 看向玩家头部位置
+        camera.lookAt(targetPosition);
     }
     
     // 更新世界
