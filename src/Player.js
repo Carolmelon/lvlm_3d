@@ -484,34 +484,15 @@ export class Player {
                 
                 // 如果角色正在移动，则旋转模型面向移动方向
                 if (this.model && this.model.visible) {
-                    // 计算模型应该旋转的角度，使其面向移动方向
+                    // 计算目标角度（使用移动方向计算）
                     const targetAngle = Math.atan2(moveDirection.x, moveDirection.z);
                     
-                    // 获取当前世界方向的角度（这里直接使用模型的旋转角度）
-                    // 角色模型与yawObject可能有旋转偏差，这里直接设置模型旋转而不是累加差值
-                    // 注意：我们不再累加旋转差值，而是直接应用目标角度
-                    
-                    // 为了平滑旋转，使用lerp插值
-                    const rotationSpeed = 15 * delta;
-                    
-                    // 使用欧拉角的临时变量来处理角度插值
-                    const currentEuler = new THREE.Euler(0, this.model.rotation.y, 0, 'XYZ');
-                    const targetEuler = new THREE.Euler(0, targetAngle, 0, 'XYZ');
-                    
-                    // 将欧拉角转换为四元数以进行平滑插值
-                    const currentQuaternion = new THREE.Quaternion().setFromEuler(currentEuler);
-                    const targetQuaternion = new THREE.Quaternion().setFromEuler(targetEuler);
-                    
-                    // 进行球面插值，确保平滑旋转
-                    currentQuaternion.slerp(targetQuaternion, rotationSpeed);
-                    
-                    // 将结果应用回模型
-                    this.model.rotation.setFromQuaternion(currentQuaternion);
+                    // 直接设置模型的旋转，确保模型始终面向移动方向
+                    this.model.rotation.y = targetAngle;
                     
                     // 调试输出
-                    console.log("目标角度:", targetAngle.toFixed(2), 
-                                "当前角度:", this.model.rotation.y.toFixed(2), 
-                                "移动方向:", moveDirection.x.toFixed(2), moveDirection.z.toFixed(2));
+                    console.log("移动方向:", moveDirection.x.toFixed(2), moveDirection.z.toFixed(2),
+                              "目标角度:", targetAngle.toFixed(2));
                 }
             }
         }
