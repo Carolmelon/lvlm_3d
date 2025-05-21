@@ -105,6 +105,25 @@ let firstPersonRotation = {
     yawY: 0
 };
 
+// 添加相机距离控制参数
+let thirdPersonDistance = 12; // 默认距离
+const MIN_DISTANCE = 3; // 最小距离
+const MAX_DISTANCE = 20; // 最大距离
+const ZOOM_SPEED = 0.5; // 缩放速度
+
+// 添加鼠标滚轮事件监听
+document.addEventListener('wheel', (event) => {
+    if (viewMode === 'third-person') {
+        // deltaY 向上滚动为负，向下滚动为正
+        thirdPersonDistance += event.deltaY * 0.01 * ZOOM_SPEED;
+        
+        // 限制距离范围
+        thirdPersonDistance = Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, thirdPersonDistance));
+        
+        console.log(`相机距离: ${thirdPersonDistance.toFixed(2)}`);
+    }
+});
+
 // 初始化第三人称相机位置
 function setupThirdPersonCamera() {
     // 设置相机位置在玩家后方
@@ -195,7 +214,12 @@ function animate() {
     // 更新第三人称相机位置
     if (viewMode === 'third-person') {
         // 计算理想的相机位置（从后上方观察）
-        const idealOffset = new THREE.Vector3(0, 7, 12);
+        const idealOffset = new THREE.Vector3(
+            0, 
+            thirdPersonDistance * 0.6, // 高度随距离变化
+            thirdPersonDistance
+        );
+        
         // 应用玩家旋转
         idealOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yawObject.rotation.y);
         idealOffset.add(player.position);
@@ -203,9 +227,9 @@ function animate() {
         // 平滑过渡到理想位置
         camera.position.lerp(idealOffset, 0.1);
         
-        // 让相机看向玩家上方一点的位置，更自然
+        // 让相机看向玩家上方一点的位置
         const targetPosition = player.position.clone();
-        targetPosition.y += 1.5; // 看向玩家头部位置
+        targetPosition.y += 1.5;
         camera.lookAt(targetPosition);
     }
     
