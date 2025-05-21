@@ -35,3 +35,4 @@ dist-ssr
 
 # 测试覆盖率输出
 coverage 
+*.glb

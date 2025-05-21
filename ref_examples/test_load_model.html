@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Animated Character</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: #333;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+        }
+        #controls-info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            padding: 10px;
+            background-color: rgba(0,0,0,0.5);
+            color: white;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Loading model... Please wait.</div>
+    <div id="controls-info">
+        <b>操作说明：</b><br>
+        <b>连续性动作：</b><br>
+        <b>W</b>：行走（Walk）<br>
+        <b>R</b>：奔跑（Run）<br>
+        <b>I</b>：待机（Idle）<br>
+        <b>S</b>：坐下（Sitting）<br>
+        <b>T</b>：站立（Standing）<br>
+        <b>D</b>：跳舞（Dance）<br>
+        <br>
+        <b>一次性动作：</b><br>
+        <b>Space</b>：跳跃（Jump）<br>
+        <b>Y</b>：点头（Yes）<br>
+        <b>N</b>：摇头（No）<br>
+        <b>V</b>：挥手（Wave）<br>
+        <b>P</b>：出拳（Punch）<br>
+        <b>U</b>：点赞（ThumbsUp）<br>
+        <b>X</b>：死亡（Death）<br>
+        <br>
+        <b>面部表情控制：</b><br>
+        <b>1</b>：愤怒表情 +0.2<br>
+        <b>2</b>：愤怒表情 -0.2<br>
+        <b>3</b>：悲伤表情 +0.2<br>
+        <b>4</b>：悲伤表情 -0.2<br>
+        <b>5</b>：惊讶表情 +0.2<br>
+        <b>6</b>：惊讶表情 -0.2<br>
+        <b>0</b>：重置所有表情<br>
+        <br>
+        <b>鼠标</b>：旋转相机（Orbit camera）
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        let scene, camera, renderer, clock, model, mixer, actions, activeAction, previousAction;
+        const modelURL = 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb'; // 示例模型
+        const animationStates = {
+            Idle: 'Idle',
+            Walking: 'Walking',
+            Running: 'Running',
+            Dance: 'Dance',
+            Jump: 'Jump',
+            Death: 'Death',
+            Sitting: 'Sitting',
+            Standing: 'Standing',
+            Yes: 'Yes',
+            No: 'No',
+            Wave: 'Wave',
+            Punch: 'Punch',
+            ThumbsUp: 'ThumbsUp'
+        };
+        let currentBaseAction = animationStates.Idle; // 用于追踪基础状态（如idle、walk、run）
+        
+        // 表情形态目标控制
+        let faceModel; // 保存面部模型的引用
+        let expressionMorphTargets = {
+            Angry: 0,
+            Sad: 0,
+            Surprised: 0
+        };
+
+        init();
+        animate();
+
+        function init() {
+            // 场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87ceeb); // 天空蓝
+            scene.fog = new THREE.Fog(0x87ceeb, 10, 50);
+
+            // 时钟
+            clock = new THREE.Clock();
+
+            // 相机
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 2, 5);
+
+            // 渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // 灯光
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            directionalLight.position.set(5, 10, 7.5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+            scene.add(directionalLight);
+            // const helper = new THREE.CameraHelper( directionalLight.shadow.camera );
+            // scene.add( helper ); // 可选：显示阴影相机辅助线
+
+            // 地面
+            const groundGeometry = new THREE.PlaneGeometry(100, 100);
+            const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.8, metalness: 0.2 });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // GLTF加载器
+            const loader = new GLTFLoader();
+            loader.load(modelURL, (gltf) => {
+                model = gltf.scene;
+                model.scale.set(0.5, 0.5, 0.5); // 如有需要可调整缩放
+                model.position.y = 0; // 调整位置使其在地面上
+                
+                model.traverse(function (object) {
+                    if (object.isMesh) {
+                        object.castShadow = true;
+                        object.receiveShadow = true; // 网格也可以接收阴影
+                        
+                        // 找到机器人的脸部模型（通常是头部的子网格）
+                        if (object.morphTargetDictionary && 
+                            (object.morphTargetDictionary.Angry !== undefined || 
+                             object.morphTargetDictionary.Sad !== undefined || 
+                             object.morphTargetDictionary.Surprised !== undefined)) {
+                            faceModel = object;
+                            console.log('找到面部模型:', faceModel.name);
+                            console.log('表情形态目标:', faceModel.morphTargetDictionary);
+                        }
+                    }
+                });
+                scene.add(model);
+                document.getElementById('info').textContent = 'Model Loaded!';
+
+                // 动画混合器
+                mixer = new THREE.AnimationMixer(model);
+                actions = {};
+                gltf.animations.forEach((clip) => {
+                    const action = mixer.clipAction(clip);
+                    actions[clip.name] = action;
+
+                    // 设置一次性动画
+                    if (['Jump', 'Yes', 'No', 'Wave', 'Punch', 'ThumbsUp', 'Death', 'Sitting', 'Standing'].includes(clip.name)) {
+                        action.loop = THREE.LoopOnce;
+                        action.clampWhenFinished = true; // 保持最后一帧
+                    }
+                });
+
+                // 设置初始动画
+                activeAction = actions[animationStates.Idle];
+                if (activeAction) {
+                    activeAction.play();
+                } else {
+                    console.warn("未找到Idle动画！");
+                }
+
+            }, undefined, (error) => {
+                console.error('加载模型时发生错误:', error);
+                document.getElementById('info').textContent = 'Error loading model. Check console.';
+            });
+
+            // 轨道控制器
+            const controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 2;
+            controls.maxDistance = 20;
+            controls.target.set(0, 1, 0); // 目标为角色大致中心
+            controls.update();
+
+            // 事件监听
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('keydown', onKeyDown, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onKeyDown(event) {
+            if (!mixer) return; // 如果模型/混合器未加载则不做任何操作
+
+            let newActionName;
+            let isOneShot = false; // 用于一次性动画（如Jump）
+
+            // 处理形态目标控制
+            if (faceModel) {
+                switch (event.key) {
+                    case '1': // 增加愤怒表情
+                        if ('Angry' in faceModel.morphTargetDictionary) {
+                            const angryIndex = faceModel.morphTargetDictionary['Angry'];
+                            expressionMorphTargets.Angry = Math.min(1, expressionMorphTargets.Angry + 0.2);
+                            faceModel.morphTargetInfluences[angryIndex] = expressionMorphTargets.Angry;
+                            console.log(`愤怒表情: ${expressionMorphTargets.Angry.toFixed(1)}`);
+                            document.getElementById('info').textContent = `愤怒表情: ${expressionMorphTargets.Angry.toFixed(1)}`;
+                        }
+                        return;
+                    case '2': // 减少愤怒表情
+                        if ('Angry' in faceModel.morphTargetDictionary) {
+                            const angryIndex = faceModel.morphTargetDictionary['Angry'];
+                            expressionMorphTargets.Angry = Math.max(0, expressionMorphTargets.Angry - 0.2);
+                            faceModel.morphTargetInfluences[angryIndex] = expressionMorphTargets.Angry;
+                            console.log(`愤怒表情: ${expressionMorphTargets.Angry.toFixed(1)}`);
+                            document.getElementById('info').textContent = `愤怒表情: ${expressionMorphTargets.Angry.toFixed(1)}`;
+                        }
+                        return;
+                    case '3': // 增加悲伤表情
+                        if ('Sad' in faceModel.morphTargetDictionary) {
+                            const sadIndex = faceModel.morphTargetDictionary['Sad'];
+                            expressionMorphTargets.Sad = Math.min(1, expressionMorphTargets.Sad + 0.2);
+                            faceModel.morphTargetInfluences[sadIndex] = expressionMorphTargets.Sad;
+                            console.log(`悲伤表情: ${expressionMorphTargets.Sad.toFixed(1)}`);
+                            document.getElementById('info').textContent = `悲伤表情: ${expressionMorphTargets.Sad.toFixed(1)}`;
+                        }
+                        return;
+                    case '4': // 减少悲伤表情
+                        if ('Sad' in faceModel.morphTargetDictionary) {
+                            const sadIndex = faceModel.morphTargetDictionary['Sad'];
+                            expressionMorphTargets.Sad = Math.max(0, expressionMorphTargets.Sad - 0.2);
+                            faceModel.morphTargetInfluences[sadIndex] = expressionMorphTargets.Sad;
+                            console.log(`悲伤表情: ${expressionMorphTargets.Sad.toFixed(1)}`);
+                            document.getElementById('info').textContent = `悲伤表情: ${expressionMorphTargets.Sad.toFixed(1)}`;
+                        }
+                        return;
+                    case '5': // 增加惊讶表情
+                        if ('Surprised' in faceModel.morphTargetDictionary) {
+                            const surprisedIndex = faceModel.morphTargetDictionary['Surprised'];
+                            expressionMorphTargets.Surprised = Math.min(1, expressionMorphTargets.Surprised + 0.2);
+                            faceModel.morphTargetInfluences[surprisedIndex] = expressionMorphTargets.Surprised;
+                            console.log(`惊讶表情: ${expressionMorphTargets.Surprised.toFixed(1)}`);
+                            document.getElementById('info').textContent = `惊讶表情: ${expressionMorphTargets.Surprised.toFixed(1)}`;
+                        }
+                        return;
+                    case '6': // 减少惊讶表情
+                        if ('Surprised' in faceModel.morphTargetDictionary) {
+                            const surprisedIndex = faceModel.morphTargetDictionary['Surprised'];
+                            expressionMorphTargets.Surprised = Math.max(0, expressionMorphTargets.Surprised - 0.2);
+                            faceModel.morphTargetInfluences[surprisedIndex] = expressionMorphTargets.Surprised;
+                            console.log(`惊讶表情: ${expressionMorphTargets.Surprised.toFixed(1)}`);
+                            document.getElementById('info').textContent = `惊讶表情: ${expressionMorphTargets.Surprised.toFixed(1)}`;
+                        }
+                        return;
+                    case '0': // 重置所有表情
+                        if (faceModel.morphTargetDictionary) {
+                            if ('Angry' in faceModel.morphTargetDictionary) {
+                                const angryIndex = faceModel.morphTargetDictionary['Angry'];
+                                faceModel.morphTargetInfluences[angryIndex] = 0;
+                                expressionMorphTargets.Angry = 0;
+                            }
+                            if ('Sad' in faceModel.morphTargetDictionary) {
+                                const sadIndex = faceModel.morphTargetDictionary['Sad'];
+                                faceModel.morphTargetInfluences[sadIndex] = 0;
+                                expressionMorphTargets.Sad = 0;
+                            }
+                            if ('Surprised' in faceModel.morphTargetDictionary) {
+                                const surprisedIndex = faceModel.morphTargetDictionary['Surprised'];
+                                faceModel.morphTargetInfluences[surprisedIndex] = 0;
+                                expressionMorphTargets.Surprised = 0;
+                            }
+                            console.log('表情已重置');
+                            document.getElementById('info').textContent = '表情已重置';
+                        }
+                        return;
+                }
+            }
+
+            switch (event.key.toUpperCase()) {
+                case 'W':
+                    newActionName = animationStates.Walking;
+                    currentBaseAction = animationStates.Walking;
+                    break;
+                case 'R':
+                    newActionName = animationStates.Running;
+                    currentBaseAction = animationStates.Running;
+                    break;
+                case 'I':
+                    newActionName = animationStates.Idle;
+                    currentBaseAction = animationStates.Idle;
+                    break;
+                case 'D':
+                    newActionName = animationStates.Dance;
+                    currentBaseAction = animationStates.Dance; // Dance也可以作为基础状态
+                    break;
+                case ' ': // 空格键
+                    newActionName = animationStates.Jump;
+                    isOneShot = true;
+                    break;
+                // 新增键位控制
+                case 'S':
+                    newActionName = animationStates.Sitting;
+                    currentBaseAction = animationStates.Sitting;
+                    break;
+                case 'T':
+                    newActionName = animationStates.Standing;
+                    currentBaseAction = animationStates.Standing;
+                    break;
+                case 'Y':
+                    newActionName = animationStates.Yes;
+                    isOneShot = true;
+                    break;
+                case 'N':
+                    newActionName = animationStates.No;
+                    isOneShot = true;
+                    break;
+                case 'V':
+                    newActionName = animationStates.Wave;
+                    isOneShot = true;
+                    break;
+                case 'P':
+                    newActionName = animationStates.Punch;
+                    isOneShot = true;
+                    break;
+                case 'U':
+                    newActionName = animationStates.ThumbsUp;
+                    isOneShot = true;
+                    break;
+                case 'X':
+                    newActionName = animationStates.Death;
+                    isOneShot = true;
+                    break;
+                default:
+                    return; // 其它按键不做处理
+            }
+
+            if (actions[newActionName] && activeAction !== actions[newActionName]) {
+                fadeToAction(newActionName, 0.2, isOneShot);
+            }
+        }
+
+        function fadeToAction(name, duration, isOneShot = false) {
+            if (!actions[name]) {
+                console.warn(`未找到动画 "${name}"！`);
+                return;
+            }
+            previousAction = activeAction;
+            activeAction = actions[name];
+
+            if (previousAction !== activeAction) {
+                if (previousAction) {
+                    previousAction.fadeOut(duration);
+                }
+            }
+            
+            activeAction
+                .reset()
+                .setEffectiveTimeScale(1)
+                .setEffectiveWeight(1)
+                .fadeIn(duration)
+                .play();
+
+            // 如果是一次性动画，播放完后切回基础状态
+            if (isOneShot) {
+                mixer.addEventListener('finished', function onLoopFinished(e) {
+                    if (e.action === activeAction) {
+                        mixer.removeEventListener('finished', onLoopFinished); // 移除监听器
+                        fadeToAction(currentBaseAction, 0.2); // 切回基础动画
+                    }
+                });
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            if (mixer) {
+                mixer.update(delta);
+            }
+            renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+</html>

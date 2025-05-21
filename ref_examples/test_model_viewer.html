@@ -17,10 +17,32 @@
             border-radius: 5px;
             font-family: monospace;
         }
+        #animation-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            font-family: monospace;
+        }
+        select {
+            background-color: #444;
+            color: white;
+            border: 1px solid #666;
+            padding: 5px;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
     <div id="info">Loading model...</div>
+    <div id="animation-controls" style="display: none;">
+        <div>选择动画:</div>
+        <select id="animation-selector"></select>
+    </div>
     <script type="importmap">
         {
             "imports": {
@@ -36,7 +58,11 @@
 
         let scene, camera, renderer, controls;
         let mixer, clock;
+        let currentAction = null;
+        let allActions = [];
         const infoElement = document.getElementById('info');
+        const animationControls = document.getElementById('animation-controls');
+        const animationSelector = document.getElementById('animation-selector');
 
         function init() {
             // Scene
@@ -91,6 +117,12 @@
             // Clock for animation
             clock = new THREE.Clock();
 
+            // Animation selector event
+            animationSelector.addEventListener('change', function() {
+                const selectedIndex = parseInt(this.value);
+                playAnimation(selectedIndex);
+            });
+
             // Load Model
             loadModel();
 
@@ -131,18 +163,32 @@
                     if (gltf.animations && gltf.animations.length) {
                         infoElement.innerHTML += 'Animations found:<br>';
                         console.log("Animations found in the model:");
+                        
+                        // Create animation mixer
+                        mixer = new THREE.AnimationMixer(model);
+                        
+                        // Setup animation dropdown
+                        animationControls.style.display = 'block';
+                        
+                        // Add animations to selector
                         gltf.animations.forEach((clip, index) => {
-                            infoElement.innerHTML += `- ${clip.name || `Animation ${index}`}<br>`;
-                            console.log(`- Name: "${clip.name}", Duration: ${clip.duration.toFixed(2)}s`);
+                            const clipName = clip.name || `Animation ${index}`;
+                            infoElement.innerHTML += `- ${clipName}<br>`;
+                            console.log(`- Name: "${clipName}", Duration: ${clip.duration.toFixed(2)}s`);
+                            
+                            // Create and store actions
+                            const action = mixer.clipAction(clip);
+                            allActions.push(action);
+                            
+                            // Add to dropdown
+                            const option = document.createElement('option');
+                            option.value = index;
+                            option.textContent = `${clipName} (${clip.duration.toFixed(2)}s)`;
+                            animationSelector.appendChild(option);
                         });
 
-                        // Play the first animation
-                        mixer = new THREE.AnimationMixer(model);
-                        const firstClip = gltf.animations[0];
-                        const action = mixer.clipAction(firstClip);
-                        action.play();
-                        infoElement.innerHTML += `<br>Playing: "${firstClip.name || 'Animation 0'}"`;
-                        console.log(`Playing animation: "${firstClip.name || 'Animation 0'}"`);
+                        // Play the first animation by default
+                        playAnimation(0);
                     } else {
                         infoElement.innerHTML += 'No animations found in the model.';
                         console.log("No animations found in the model.");
@@ -160,6 +206,24 @@
                     console.error('Error loading GLB model:', error);
                 }
             );
+        }
+
+        function playAnimation(index) {
+            if (!allActions || index >= allActions.length) return;
+            
+            // Fade out current animation if any
+            if (currentAction) {
+                currentAction.fadeOut(0.5);
+            }
+            
+            // Play new animation
+            currentAction = allActions[index];
+            currentAction.reset();
+            currentAction.fadeIn(0.5);
+            currentAction.play();
+            
+            const animName = animationSelector.options[index].textContent;
+            console.log(`Playing animation: ${animName}`);
         }
 
         function onWindowResize() {
