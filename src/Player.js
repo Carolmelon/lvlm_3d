@@ -558,7 +558,8 @@ export class Player {
         if (viewMode === 'third-person' && this.model) {
             // 更新模型位置
             this.model.position.copy(this.position);
-            this.model.position.y = this.position.y - this.height + 0.5;
+            // 将模型位置向下调整，使其脚部正好在地面上
+            this.model.position.y = this.position.y - this.height;
 
             // 只在移动时更新目标旋转角度
             if (moveDirection.length() > 0) {
