@@ -32,7 +32,7 @@ export class World {
         const resolution = 128;
         const size = this.terrainSize;
         const geometry = new THREE.PlaneGeometry(size, size, resolution, resolution);
-        geometry.rotateX(-Math.PI / 2);
+        geometry.rotateX(-Math.PI / 2);     // 旋转90度，使平面朝下
         
         // 应用高度图
         const heightScale = 20;
