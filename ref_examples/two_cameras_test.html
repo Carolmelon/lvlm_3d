@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 双相机分屏Demo</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: Arial, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 100;
+        }
+        #separator {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 2px;
+            height: 100%;
+            background-color: white;
+            transform: translateX(-50%);
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Three.js 双相机分屏演示 | 左：主视角 | 右：俯视角</div>
+    <div id="separator"></div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script>
+        // 1. 初始化场景、渲染器
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // 2. 创建两个相机
+        const aspectRatio = window.innerWidth / 2 / window.innerHeight;
+        
+        // 左相机：主视角（第一人称）
+        const leftCamera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
+        leftCamera.position.set(0, 1.6, 5);
+        leftCamera.name = "Left Camera (Main View)";
+        
+        // 右相机：俯视角
+        const rightCamera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
+        rightCamera.position.set(0, 10, 0);
+        rightCamera.lookAt(0, 0, 0);
+        rightCamera.name = "Right Camera (Top View)";
+
+        // 3. 添加光源
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 7);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 1024;
+        directionalLight.shadow.mapSize.height = 1024;
+        scene.add(directionalLight);
+
+        // 4. 添加场景物体
+        // 地面
+        const groundGeometry = new THREE.PlaneGeometry(20, 20);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x3a5f0b,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // 立方体
+        const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+        const cubeMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x00a1f3,
+            roughness: 0.3,
+            metalness: 0.8
+        });
+        const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+        cube.position.set(0, 0.5, 0);
+        cube.castShadow = true;
+        scene.add(cube);
+
+        // 球体
+        const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const sphereMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xff5722,
+            roughness: 0.2,
+            metalness: 0.5
+        });
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        sphere.position.set(-2, 0.5, 2);
+        sphere.castShadow = true;
+        scene.add(sphere);
+
+        // 合并后的动画循环函数
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 处理相机移动
+            handleCameraMovement();
+            
+            // 旋转立方体
+            cube.rotation.y += 0.01;
+            
+            // 移动球体（往返运动）
+            sphere.position.x = -2 + Math.sin(Date.now() * 0.001) * 2;
+
+            // 渲染左视图（主视角）
+            renderer.setViewport(0, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissor(0, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissorTest(true);
+            renderer.render(scene, leftCamera);
+
+            // 渲染右视图（俯视角）
+            renderer.setViewport(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissor(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
+            renderer.setScissorTest(true);
+            renderer.render(scene, rightCamera);
+        }
+
+        // 6. 窗口大小调整
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const aspect = width / 2 / height;
+            
+            // 更新渲染器
+            renderer.setSize(width, height);
+            
+            // 更新相机
+            leftCamera.aspect = aspect;
+            rightCamera.aspect = aspect;
+            leftCamera.updateProjectionMatrix();
+            rightCamera.updateProjectionMatrix();
+        });
+
+        // 7. 添加键盘控制（WASD移动左相机）
+        const keys = {};
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        const cameraSpeed = 0.1;
+        function handleCameraMovement() {
+            if (keys['KeyW']) {
+                leftCamera.translateZ(-cameraSpeed);
+            }
+            if (keys['KeyS']) {
+                leftCamera.translateZ(cameraSpeed);
+            }
+            if (keys['KeyA']) {
+                leftCamera.translateX(-cameraSpeed);
+            }
+            if (keys['KeyD']) {
+                leftCamera.translateX(cameraSpeed);
+            }
+            if (keys['Space']) {
+                leftCamera.position.y += cameraSpeed;
+            }
+            if (keys['ShiftLeft']) {
+                leftCamera.position.y -= cameraSpeed;
+            }
+        }
+
+        // 启动单个动画循环
+        animate();
+    </script>
+</body>
+</html>
