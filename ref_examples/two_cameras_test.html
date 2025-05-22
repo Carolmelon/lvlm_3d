@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Three.js 双相机分屏Demo</title>
+    <title>Three.js VR 立体视觉模拟</title>
     <style>
         body { 
             margin: 0; 
@@ -22,6 +22,39 @@
             pointer-events: none;
             z-index: 100;
         }
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #ipd-control {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            background-color: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        #ipd-slider {
+            width: 200px;
+            margin: 10px 0;
+        }
+        #ipd-value {
+            font-size: 12px;
+            margin-top: 5px;
+        }
         #separator {
             position: absolute;
             top: 0;
@@ -35,7 +68,18 @@
     </style>
 </head>
 <body>
-    <div id="info">Three.js 双相机分屏演示 | 左：主视角 | 右：俯视角</div>
+    <div id="info">Three.js VR 立体视觉模拟 | 左：左眼视角 | 右：右眼视角</div>
+    <div id="ipd-control">
+        <div>调整双眼距离 (IPD)</div>
+        <input type="range" id="ipd-slider" min="1" max="200" value="64" step="1">
+        <div id="ipd-value">当前 IPD: 64 厘米</div>
+    </div>
+    <div id="controls">
+        <div>相机控制: 方向键转向, WASD前后左右, 空格/Shift上下</div>
+        <div>暂停/恢复动画: P</div>
+        <div>球体控制: IJKL (U/O 上下)</div>
+        <div>立方体控制: TFGH (Y/N 上下)</div>
+    </div>
     <div id="separator"></div>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script>
@@ -47,19 +91,48 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // 2. 创建两个相机
+        // 2. 创建两个相机（模拟人眼）
         const aspectRatio = window.innerWidth / 2 / window.innerHeight;
+        let IPD = 0.064; // 瞳距，单位为米，平均人眼距离约为6.4厘米
         
-        // 左相机：主视角（第一人称）
+        // 创建相机组，便于同时控制两个相机
+        const cameraGroup = new THREE.Group();
+        cameraGroup.position.set(0, 1.6, 5); // 将相机组放在适当的位置
+        scene.add(cameraGroup);
+        
+        // 左眼相机
         const leftCamera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
-        leftCamera.position.set(0, 1.6, 5);
-        leftCamera.name = "Left Camera (Main View)";
+        leftCamera.name = "左眼相机";
         
-        // 右相机：俯视角
+        // 右眼相机
         const rightCamera = new THREE.PerspectiveCamera(75, aspectRatio, 0.1, 1000);
-        rightCamera.position.set(0, 10, 0);
-        rightCamera.lookAt(0, 0, 0);
-        rightCamera.name = "Right Camera (Top View)";
+        rightCamera.name = "右眼相机";
+        
+        // 将相机添加到相机组
+        cameraGroup.add(leftCamera);
+        cameraGroup.add(rightCamera);
+        
+        // IPD 调整功能
+        const ipdSlider = document.getElementById('ipd-slider');
+        const ipdValue = document.getElementById('ipd-value');
+        
+        ipdSlider.addEventListener('input', () => {
+            // 获取滑动条的值（厘米），并转换为米
+            const newIPD = parseFloat(ipdSlider.value) / 100;
+            IPD = newIPD;
+            
+            // 更新显示值
+            ipdValue.textContent = `当前 IPD: ${ipdSlider.value} 厘米`;
+            
+            // 更新相机位置
+            updateCameraPositions();
+        });
+        
+        function updateCameraPositions() {
+            // 调整左右相机相对于相机组的位置，保持相机朝向不变
+            leftCamera.position.set(-IPD/2, 0, 0);
+            rightCamera.position.set(IPD/2, 0, 0);
+        }
 
         // 3. 添加光源
         const ambientLight = new THREE.AmbientLight(0x404040);
@@ -109,6 +182,11 @@
         sphere.castShadow = true;
         scene.add(sphere);
 
+        // 添加动画暂停控制
+        let animationPaused = false;
+        // 添加物体移动速度
+        const objectSpeed = 0.1;
+        
         // 合并后的动画循环函数
         function animate() {
             requestAnimationFrame(animate);
@@ -116,19 +194,25 @@
             // 处理相机移动
             handleCameraMovement();
             
-            // 旋转立方体
-            cube.rotation.y += 0.01;
+            // 处理物体移动
+            handleObjectMovement();
             
-            // 移动球体（往返运动）
-            sphere.position.x = -2 + Math.sin(Date.now() * 0.001) * 2;
+            // 物体自动动画（如果未暂停）
+            if (!animationPaused) {
+                // 旋转立方体
+                cube.rotation.y += 0.01;
+                
+                // 移动球体（往返运动）
+                sphere.position.x = -2 + Math.sin(Date.now() * 0.001) * 2;
+            }
 
-            // 渲染左视图（主视角）
+            // 渲染左眼视图
             renderer.setViewport(0, 0, window.innerWidth / 2, window.innerHeight);
             renderer.setScissor(0, 0, window.innerWidth / 2, window.innerHeight);
             renderer.setScissorTest(true);
             renderer.render(scene, leftCamera);
 
-            // 渲染右视图（俯视角）
+            // 渲染右眼视图
             renderer.setViewport(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
             renderer.setScissor(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
             renderer.setScissorTest(true);
@@ -151,39 +235,120 @@
             rightCamera.updateProjectionMatrix();
         });
 
-        // 7. 添加键盘控制（WASD移动左相机）
+        // 7. 添加键盘控制（WASD移动相机组）
         const keys = {};
         document.addEventListener('keydown', (e) => {
             keys[e.code] = true;
+            
+            // 暂停/恢复动画（按P键）
+            if (e.code === 'KeyP') {
+                animationPaused = !animationPaused;
+                console.log(animationPaused ? "动画已暂停" : "动画已恢复");
+            }
         });
         document.addEventListener('keyup', (e) => {
             keys[e.code] = false;
         });
 
         const cameraSpeed = 0.1;
+        const rotationSpeed = 0.02;
+        
         function handleCameraMovement() {
+            // 前后左右移动
             if (keys['KeyW']) {
-                leftCamera.translateZ(-cameraSpeed);
+                cameraGroup.translateZ(-cameraSpeed);
             }
             if (keys['KeyS']) {
-                leftCamera.translateZ(cameraSpeed);
+                cameraGroup.translateZ(cameraSpeed);
             }
             if (keys['KeyA']) {
-                leftCamera.translateX(-cameraSpeed);
+                cameraGroup.translateX(-cameraSpeed);
             }
             if (keys['KeyD']) {
-                leftCamera.translateX(cameraSpeed);
+                cameraGroup.translateX(cameraSpeed);
             }
+            
+            // 上下移动
             if (keys['Space']) {
-                leftCamera.position.y += cameraSpeed;
+                cameraGroup.position.y += cameraSpeed;
             }
             if (keys['ShiftLeft']) {
-                leftCamera.position.y -= cameraSpeed;
+                cameraGroup.position.y -= cameraSpeed;
+            }
+            
+            // 左右旋转
+            if (keys['ArrowLeft']) {
+                cameraGroup.rotation.y += rotationSpeed;
+            }
+            if (keys['ArrowRight']) {
+                cameraGroup.rotation.y -= rotationSpeed;
+            }
+            
+            // 上下视角
+            if (keys['ArrowUp']) {
+                leftCamera.rotation.x += rotationSpeed;
+                rightCamera.rotation.x += rotationSpeed;
+            }
+            if (keys['ArrowDown']) {
+                leftCamera.rotation.x -= rotationSpeed;
+                rightCamera.rotation.x -= rotationSpeed;
+            }
+        }
+        
+        // 添加物体移动控制函数
+        function handleObjectMovement() {
+            // 球体控制 (IJKL)
+            if (keys['KeyI']) {
+                sphere.position.z -= objectSpeed;
+            }
+            if (keys['KeyK']) {
+                sphere.position.z += objectSpeed;
+            }
+            if (keys['KeyJ']) {
+                sphere.position.x -= objectSpeed;
+            }
+            if (keys['KeyL']) {
+                sphere.position.x += objectSpeed;
+            }
+            
+            // 立方体控制 (TFGH)
+            if (keys['KeyT']) {
+                cube.position.z -= objectSpeed;
+            }
+            if (keys['KeyG']) {
+                cube.position.z += objectSpeed;
+            }
+            if (keys['KeyF']) {
+                cube.position.x -= objectSpeed;
+            }
+            if (keys['KeyH']) {
+                cube.position.x += objectSpeed;
+            }
+            
+            // 物体上升/下降 (U/O 球体, Y/N 立方体)
+            if (keys['KeyU']) {
+                sphere.position.y += objectSpeed;
+            }
+            if (keys['KeyO']) {
+                sphere.position.y -= objectSpeed;
+            }
+            if (keys['KeyY']) {
+                cube.position.y += objectSpeed;
+            }
+            if (keys['KeyN']) {
+                cube.position.y -= objectSpeed;
             }
         }
 
         // 启动单个动画循环
         animate();
+        
+        // 初始化相机位置
+        updateCameraPositions();
+        
+        // 让相机朝向场景中心
+        leftCamera.lookAt(0, 0, 0);
+        rightCamera.lookAt(0, 0, 0);
     </script>
 </body>
 </html>
