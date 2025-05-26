@@ -10,6 +10,9 @@ export class Player {
         this.jumpForce = 10;
         this.gravity = 20;
         
+        // 相机朝向控制（专用于第三人称视图）
+        this.cameraOrientation = 0; // 相机水平旋转角度
+        
         // 玩家状态
         this.position = new THREE.Vector3(0, 0, 0);  // 位置
         this.velocity = new THREE.Vector3(0, 0, 0); // 速度
@@ -91,9 +94,6 @@ export class Player {
         // 添加键盘事件监听
         document.addEventListener('keydown', this.onKeyDown.bind(this), false);
         document.addEventListener('keyup', this.onKeyUp.bind(this), false);
-        
-        // 添加鼠标事件监听
-        document.addEventListener('mousemove', this.onMouseMove.bind(this), false);
         
         // 载入角色模型
         this.loadCharacterModel();
@@ -325,20 +325,6 @@ export class Player {
             case 'ShiftRight':
                 this.keys.crouch = false;
                 break;
-        }
-    }
-    
-    onMouseMove(event) {
-        if (document.pointerLockElement === document.body) {
-            // 应用鼠标移动到摄像机旋转
-            this.yawObject.rotation.y -= event.movementX * this.mouseSensitivity;
-            this.pitchObject.rotation.x -= event.movementY * this.mouseSensitivity;
-            
-            // 限制俯仰角度，防止过度旋转
-            this.pitchObject.rotation.x = Math.max(
-                -Math.PI / 2, 
-                Math.min(Math.PI / 2, this.pitchObject.rotation.x)
-            );
         }
     }
     
@@ -735,5 +721,15 @@ export class Player {
     // 获取玩家位置
     getPosition() {
         return this.position;
+    }
+    
+    // 获取相机朝向
+    getCameraOrientation() {
+        return this.cameraOrientation;
+    }
+    
+    // 设置相机朝向
+    setCameraOrientation(orientation) {
+        this.cameraOrientation = orientation;
     }
 } 

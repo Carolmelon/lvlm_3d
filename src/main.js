@@ -124,12 +124,32 @@ document.addEventListener('wheel', (event) => {
     }
 });
 
+// 添加鼠标移动事件监听
+document.addEventListener('mousemove', (event) => {
+    if (document.pointerLockElement === document.body) {
+        if (viewMode === 'first-person') {
+            // 第一人称模式：鼠标移动控制玩家旋转
+            player.yawObject.rotation.y -= event.movementX * player.mouseSensitivity;
+            player.pitchObject.rotation.x -= event.movementY * player.mouseSensitivity;
+            
+            // 限制俯仰角度，防止过度旋转
+            player.pitchObject.rotation.x = Math.max(
+                -Math.PI / 2, 
+                Math.min(Math.PI / 2, player.pitchObject.rotation.x)
+            );
+        } else {
+            // 第三人称模式：鼠标移动只控制相机朝向
+            player.setCameraOrientation(player.getCameraOrientation() - event.movementX * player.mouseSensitivity);
+        }
+    }
+});
+
 // 初始化第三人称相机位置
 function setupThirdPersonCamera() {
     // 设置相机位置在玩家后方
     const cameraOffset = new THREE.Vector3(0, 5, 10);
-    // 应用当前玩家朝向
-    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yawObject.rotation.y);
+    // 应用当前相机朝向
+    cameraOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.getCameraOrientation());
     // 设置相机位置（玩家位置 + 偏移）
     camera.position.copy(player.position).add(cameraOffset);
     // 让相机看向玩家
@@ -143,6 +163,9 @@ document.addEventListener('keydown', (event) => {
         if (viewMode === 'first-person') {
             firstPersonRotation.pitchX = player.pitchObject.rotation.x;
             firstPersonRotation.yawY = player.yawObject.rotation.y;
+            
+            // 初始化相机朝向与玩家朝向一致
+            player.setCameraOrientation(player.yawObject.rotation.y);
         }
         
         viewMode = viewMode === 'first-person' ? 'third-person' : 'first-person';
@@ -220,8 +243,8 @@ function animate() {
             thirdPersonDistance
         );
         
-        // 应用玩家旋转
-        idealOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.yawObject.rotation.y);
+        // 应用相机朝向（而不是玩家朝向）
+        idealOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.getCameraOrientation());
         idealOffset.add(player.position);
         
         // 平滑过渡到理想位置
