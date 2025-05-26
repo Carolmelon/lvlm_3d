@@ -99,11 +99,6 @@ let lastFpsUpdate = 0;
 
 // 添加视图模式切换功能
 let viewMode = 'first-person'; // 'first-person' 或 'third-person'
-// 保存原始第一人称旋转信息
-let firstPersonRotation = {
-    pitchX: 0,
-    yawY: 0
-};
 
 // 添加相机距离控制参数
 let thirdPersonDistance = 12; // 默认距离
@@ -159,12 +154,8 @@ function setupThirdPersonCamera() {
 // 切换视图模式
 document.addEventListener('keydown', (event) => {
     if (event.code === 'KeyT') {
-        // 如果从第一人称切换到第三人称，先保存当前旋转
+        // 如果从第一人称切换到第三人称，初始化相机朝向与玩家朝向一致
         if (viewMode === 'first-person') {
-            firstPersonRotation.pitchX = player.pitchObject.rotation.x;
-            firstPersonRotation.yawY = player.yawObject.rotation.y;
-            
-            // 初始化相机朝向与玩家朝向一致
             player.setCameraOrientation(player.yawObject.rotation.y);
         }
         
@@ -189,14 +180,10 @@ document.addEventListener('keydown', (event) => {
             // 重置相机和旋转
             camera.position.set(0, 0, 0);
             camera.rotation.set(0, 0, 0);
-            
-            // 恢复原始旋转
-            player.pitchObject.rotation.x = firstPersonRotation.pitchX;
-            player.yawObject.rotation.y = firstPersonRotation.yawY;
-            
+
             // 将相机添加回pitchObject
             player.pitchObject.add(camera);
-            
+
             // 隐藏角色模型
             if (player.model) {
                 player.model.visible = false;
