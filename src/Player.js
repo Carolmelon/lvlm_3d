@@ -583,9 +583,8 @@ export class Player {
             // 应用旋转
             this.model.rotation.y = this.currentRotation;
             
-            // 同步yawObject旋转与模型旋转
-            // 这样切换回第一人称时，视角方向将与角色朝向一致
-            this.yawObject.rotation.y = this.currentRotation;
+            // 在第三人称模式下也更新yawObject旋转，以便切换视图时保持一致
+            this.yawObject.rotation.y = this.currentRotation - Math.PI;
         }
         
         // 更新动画
