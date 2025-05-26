@@ -58,6 +58,7 @@ export class Player {
         this.activeAction = null;
         this.previousAction = null;
         this.currentBaseAction = 'Idle'; // 默认动画状态
+        this.playingSpecialAnimation = false; // 是否正在播放特殊动画
         this.animationStates = {
             Idle: 'Idle',
             Walking: 'Walking',
@@ -176,12 +177,22 @@ export class Player {
                 
             // 如果是一次性动画，播放完后切回基础状态
             if (isOneShot && this.mixer) {
-                this.mixer.addEventListener('finished', (e) => {
+                // 移除所有已存在的监听器，避免重复
+                const existingListeners = this.mixer._listeners?.finished?.slice() || [];
+                existingListeners.forEach(listener => {
+                    this.mixer.removeEventListener('finished', listener);
+                });
+                
+                // 添加新的监听器
+                const onFinished = (e) => {
                     if (e.action === this.activeAction) {
-                        this.mixer.removeEventListener('finished', arguments.callee);
+                        this.mixer.removeEventListener('finished', onFinished);
+                        this.playingSpecialAnimation = false; // 重置特殊动画标志
                         this.fadeToAction(this.currentBaseAction, 0.2);
                     }
-                });
+                };
+                
+                this.mixer.addEventListener('finished', onFinished);
             }
         }
     }
@@ -190,6 +201,11 @@ export class Player {
     updateAnimation(delta) {
         if (this.mixer) {
             this.mixer.update(delta);
+            
+            // 如果正在播放特殊动画，不进行状态更新
+            if (this.playingSpecialAnimation) {
+                return;
+            }
             
             // 根据玩家状态更新动画
             if (this.isJumping && this.activeAction !== this.actions['Jump']) {
@@ -254,26 +270,31 @@ export class Player {
             case 'KeyY':
                 if (this.actions && this.actions['Yes']) {
                     this.fadeToAction('Yes', 0.2, true);
+                    this.playingSpecialAnimation = true;
                 }
                 break;
             case 'KeyN':
                 if (this.actions && this.actions['No']) {
                     this.fadeToAction('No', 0.2, true);
+                    this.playingSpecialAnimation = true;
                 }
                 break;
             case 'KeyV':
                 if (this.actions && this.actions['Wave']) {
                     this.fadeToAction('Wave', 0.2, true);
+                    this.playingSpecialAnimation = true;
                 }
                 break;
             case 'KeyP':
                 if (this.actions && this.actions['Punch']) {
                     this.fadeToAction('Punch', 0.2, true);
+                    this.playingSpecialAnimation = true;
                 }
                 break;
             case 'KeyX':
                 if (this.actions && this.actions['Death']) {
                     this.fadeToAction('Death', 0.2, true);
+                    this.playingSpecialAnimation = true;
                 }
                 break;
         }
