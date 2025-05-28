@@ -127,14 +127,6 @@ document.addEventListener('mousemove', (event) => {
             player.yawObject.rotation.y -= event.movementX * player.mouseSensitivity;
             player.pitchObject.rotation.x -= event.movementY * player.mouseSensitivity;
             
-            // 同步更新模型旋转（即使在第一人称下不可见，但切换到第三人称时会用到）
-            if (player.model) {
-                player.model.rotation.y = player.yawObject.rotation.y - Math.PI;
-                player.currentRotation = player.model.rotation.y;
-            } else {
-                console.log("模型尚未加载");
-            }
-            
             // 限制俯仰角度，防止过度旋转
             player.pitchObject.rotation.x = Math.max(
                 -Math.PI / 2, 
@@ -183,6 +175,7 @@ document.addEventListener('keydown', (event) => {
                 // 同步模型旋转与yawObject旋转，添加π(180度)偏移使朝向一致
                 player.model.rotation.y = player.yawObject.rotation.y - Math.PI;
                 player.currentRotation = player.model.rotation.y;
+                player.targetRotation = player.currentRotation;
             }
         } else {
             // 切换到第一人称
